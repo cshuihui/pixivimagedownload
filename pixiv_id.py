@@ -1,5 +1,4 @@
 import requests
-from pixivpy3 import AppPixivAPI
 import time
 
 def id_save(name, page, phpsessid):

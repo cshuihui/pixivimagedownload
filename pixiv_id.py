@@ -80,5 +80,9 @@ def id_save(name, page, phpsessid):
 
 
 if __name__ == '__main__':
-    phpsessid = "78166549_F5nPs6AxBOnQzd09d7wdEd5w63c94OSp"
-    print(id_save('jufufu', page=1, phpsessid=phpsessid))
+    with open("phpsessid.txt", 'r') as f:
+        phpsessid = f.read()
+    number = list(range(1, 10))
+    random.shuffle(number)
+    for i in number:
+        print(id_save('jufufu', page=i, phpsessid=phpsessid))

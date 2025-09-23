@@ -38,11 +38,12 @@ def link_find(phpsessid, pid):
 
     image_url = 'https://www.pixiv.net/ajax/illust/'
     response = requests.get(url=image_url + str(pid), headers=headers, cookies=cookies)
-    # json_data = response.json()   # json()来自requests可以自动将json解析成字典
+    # json_data = response.json()  # json()来自requests可以自动将json解析成字典
 
     if response.status_code == 200:
         link = response.json()['body']['urls']["original"]
         print("获取成功！")
+        print(response.json()['body']['tags']['tags'])
         time.sleep(random.uniform(1, 3))
     else:
         print('获取失败,状态码：', response.status_code)
@@ -51,5 +52,7 @@ def link_find(phpsessid, pid):
 
 
 if __name__ == '__main__':
+    with open("phpsessid.txt", 'r') as f:
+        phpsessid = f.read()
     time.sleep(1)
-    print(link_find("78166549_F5nPs6AxBOnQzd09d7wdEd5w63c94OSp", '131854536'))
+    print(link_find(phpsessid, '134403445'))

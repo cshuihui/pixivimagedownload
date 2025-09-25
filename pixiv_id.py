@@ -8,7 +8,6 @@ def id_save(name, page, phpsessid):
     url = f'https://www.pixiv.net/ajax/search/artworks/{name}?word=nahida&order=date_d&p='
 
     cookies = {
-        'first_visit_datetime_pc': '2024-07-04%2020%3A04%3A52',  # 第一次访问的时间
         'privacy_policy_agreement': '7',
         'privacy_policy_notification': '0',
         'PHPSESSID': f'{phpsessid}',

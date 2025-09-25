@@ -7,7 +7,6 @@ import random
 
 save_dir = 'download'
 
-
 def link_to_image(sub_dir, image_name, pid_link):
     headers = {
         'sec-ch-ua-platform': '"Windows"',

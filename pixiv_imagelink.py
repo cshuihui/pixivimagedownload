@@ -1,11 +1,18 @@
 import random
 import time
 import requests
-import pixiv_id
 
 
+def mark_r18_r18g(data):
+    result = {'R18': 0, 'R18G': 0}
+    for d in data:
+        if d['tag'] == 'R-18':
+            result['R18'] = 1
+        elif d['tag'] == 'R-18G':
+            result['R18G'] = 1
+    return result
 def link_find(phpsessid, pid):
-    link = ''
+    links = dict()
     print('开始获取pid直链')
 
     cookies = {
@@ -40,14 +47,15 @@ def link_find(phpsessid, pid):
     # json_data = response.json()  # json()来自requests可以自动将json解析成字典
 
     if response.status_code == 200:
-        link = response.json()['body']['urls']["original"]
+        links.update({'link': response.json()['body']['urls']["original"]})
+        links.update(mark_r18_r18g(response.json()['body']['tags']['tags']))
         print("获取成功！")
-        print(response.json()['body']['tags']['tags'])
+        # print(response.json()['body']['tags']['tags'])
         time.sleep(random.uniform(1, 3))
     else:
         print('获取失败,状态码：', response.status_code)
 
-    return link
+    return links
 
 
 if __name__ == '__main__':

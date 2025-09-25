@@ -2,8 +2,9 @@ import requests
 import time
 import random
 
-
 MaxTryTimes = 5
+
+
 def id_save(name, page, phpsessid):
     url = f'https://www.pixiv.net/ajax/search/artworks/{name}?word=nahida&order=date_d&p='
 
@@ -33,17 +34,17 @@ def id_save(name, page, phpsessid):
 
     print(f'正在获取第 {page} 页的pid')
     time.sleep(random.randint(2, 4))
-    for times in range(1, MaxTryTimes+1):
+    for times in range(1, MaxTryTimes + 1):
         try:
             response = requests.get(url=url + str(page), headers=headers, cookies=cookies, timeout=(10, 5))
             #   连接10秒 读取5秒
 
-            response.raise_for_status()     # 主动出发异常才会被try捕捉
+            response.raise_for_status()  # 主动出发异常才会被try捕捉
 
             json_data = response.json()  # json()来自requests可以自动将json解析成字典
 
-            if type(json_data['body']) is not dict:     # 似乎到一定页数会输出空列表
-                    print(json_data['body'])
+            if type(json_data['body']) is not dict:  # 似乎到一定页数会输出空列表
+                print(json_data['body'])
 
             else:
                 for item in json_data['body']['illustManga']["data"]:
@@ -74,7 +75,7 @@ def id_save(name, page, phpsessid):
             print("发生其他错误：", e)
         print(f"正在尝试重连..({times}/{MaxTryTimes})")
 
-    random.shuffle(id_list)     # 打乱列表元素顺序
+    random.shuffle(id_list)  # 打乱列表元素顺序
     return id_list
 
 

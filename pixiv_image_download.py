@@ -9,7 +9,6 @@ save_dir = 'download'
 R18_rem = 0
 R18G_rem = 0
 
-
 def link_to_image(sub_dir, image_name, pid_link):
     headers = {
         'sec-ch-ua-platform': '"Windows"',

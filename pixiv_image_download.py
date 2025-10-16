@@ -70,7 +70,7 @@ def user_input():
             continue
         break
     while 1:
-        r18_rem = input('R18标签标记（0/1）:')
+        r18_rem = input('R18标签是否标记（0/1）:')
         if r18_rem == '':
             r18_rem = 0
             break

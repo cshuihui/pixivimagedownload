@@ -5,11 +5,10 @@ import time
 import os
 import random
 
-save_dir = 'download'
-R18_rem = 0
-R18G_rem = 0
+MIN_WAIT_SECONDS = 0.1
+MAX_WAIT_SECONDS = 0.5
 
-def link_to_image(sub_dir, image_name, pid_link):
+def link_to_image(sub_dir, image_name, pid_link, phpsessid):
     headers = {
         'sec-ch-ua-platform': '"Windows"',
         "Referer": "https://www.pixiv.net/",
@@ -43,17 +42,20 @@ def link_to_image(sub_dir, image_name, pid_link):
                 with open(sub_dir + '/' + image_name, "wb") as f:
                     f.write(response.content)
                 print(image_name, '下载成功！')
-                time.sleep(random.uniform(0.5, 1.5))
+                time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
                 return True
             else:
                 print("请求失败,状态码", response.status_code)
+                if response.status_code == 404 or response.status_code == '404':
+                    break
                 print(f"正在进行第{i}次尝试...")
-                time.sleep(random.uniform(0.5, 1.5))
+                time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
 
         except requests.exceptions.Timeout:
             print("请求超时!")
         except requests.exceptions.RequestException as e:
             print(f"请求错误, 错误信息: {e}")
+
     return False
 
 
@@ -118,7 +120,7 @@ def user_input():
     # 在 while 里定义的变量 start_page，它其实是整个函数 user_input() 的局部变量。
 
 
-def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1):
+def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1, save_dir='download'):
     sub_dir = os.path.join(save_dir, name)  # download/nahida os会自动处理是 / 还是 \
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(sub_dir, exist_ok=True)
@@ -141,6 +143,7 @@ def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1
                  '-lOci6hh5jjnmGdeeUDtZ83WndbyRZtywdaDKC695p7NeoN_PwldsmZy5jHzQvixJ3AL0Qh6'
                  '-LDChj5UOmnQED8Uabak_FUQVkPUhfScRtxhYTmUlYI-w%3D%3D%22%5D%5D',
     }
+    # max_download_times = 5
     for pages in range(start_page, last_page + 1):
 
         pid_list = pixiv_id.id_save(name, pages, phpsessid)
@@ -149,7 +152,7 @@ def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1
         time.sleep(random.randint(1, 3))
         for index, pid in enumerate(pid_list, start=1):
             pid_links = pixiv_imagelink.link_find(phpsessid, pid)
-            if pid_links['R18'] != R18_rem or pid_links['R18G'] != R18G_rem:
+            if pid_links['R18'] != r18_rem or pid_links['R18G'] != r18g_rem:
                 print(pid, '已过滤')
                 continue
             image_name = pid_links['link'].split(sep='/')[-1]
@@ -160,14 +163,21 @@ def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1
                 temp_name = ''.join(temp_list)  # 列表转字符串
                 print(temp_name)
                 temp_link = pid_links['link'].replace(image_name, temp_name)
-                if not link_to_image(sub_dir, temp_name, temp_link):
+                if not link_to_image(sub_dir, temp_name, temp_link, phpsessid):
                     break
-
+            # max_download_times -= 1
+            # print(max_download_times)
+            # if max_download_times <= 0:
+            #     break
             print("下载完成！准备下载下一个…")
-            time.sleep(random.uniform(0.5, 1.5))  # uniform 用于小数点之间的随机数 输出为float类型
+
+            time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))  # uniform 用于小数点之间的随机数 输出为float类型
+
 
 
 if __name__ == "__main__":
+    R18_rem = 0
+    R18G_rem = 0
     with open("phpsessid.txt", 'r') as f:
         phpsessid = f.read()
     while 1:

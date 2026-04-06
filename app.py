@@ -8,8 +8,10 @@ import numpy as np
 image_list = []
 default_image = '143035291_p0.jpg'
 pids_filter_dir = 'pids_filter.txt'
-with open(pids_filter_dir, 'a+') as f:
-    pids_filter_list = f.read().split('\n')
+with open(pids_filter_dir, 'a+') as f:  # 用a+文件指针会在文件末尾，需要将指针移到开头
+    f.seek(0)
+    pids_filter_list = f.read().splitlines()
+    # print(pids_filter_list)
     if pids_filter_list == ['']:
         pids_filter_list = []
 
@@ -193,6 +195,7 @@ with gr.Blocks(title="Pixiv 图片筛选器") as demo:
 
 
 demo.launch(theme=gr.themes.Soft(),
-               share=False,
-               inbrowser=True
-               )  # share=True 会生成公网链接
+            pwa=False,
+            share=False,
+            inbrowser=True
+            )  # share=True 会生成公网链接

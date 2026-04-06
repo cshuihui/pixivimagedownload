@@ -120,7 +120,9 @@ def user_input():
     # 在 while 里定义的变量 start_page，它其实是整个函数 user_input() 的局部变量。
 
 
-def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1, save_dir='download'):
+def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1, save_dir='download', pids_filter=None):
+    if pids_filter is None:
+        pids_filter = []
     sub_dir = os.path.join(save_dir, name)  # download/nahida os会自动处理是 / 还是 \
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(sub_dir, exist_ok=True)
@@ -151,9 +153,12 @@ def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1
         print(f"正在下载第 {pages} 页的图片")
         time.sleep(random.randint(1, 3))
         for index, pid in enumerate(pid_list, start=1):
+            if pid in pids_filter:
+                print(pid, '已过滤(用户选择)')
+                continue
             pid_links = pixiv_imagelink.link_find(phpsessid, pid)
             if pid_links['R18'] != r18_rem or pid_links['R18G'] != r18g_rem:
-                print(pid, '已过滤')
+                print(pid, '已过滤(r18/r18g类型)')
                 continue
             image_name = pid_links['link'].split(sep='/')[-1]
             print(f"正在下载 {image_name} ({index}/{len(pid_list)})")

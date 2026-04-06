@@ -2,76 +2,142 @@ import gradio as gr
 import os
 import shutil
 from pixiv_image_download import image_download
+import numpy as np
 
 # 👉 假设这是你爬取后的图片路径列表
 image_list = []
-image_list_len = 0
-phpsessid = '78166549_0A7GK0qSiaLwsDnuyfOUqn4dCd7BlphJ'
+default_image = '143035291_p0.jpg'
+pids_filter_dir = 'pids_filter.txt'
+with open(pids_filter_dir, 'a+') as f:
+    pids_filter_list = f.read().split('\n')
+    if pids_filter_list == ['']:
+        pids_filter_list = []
+
+with open('phpsessid.txt', 'r') as f:
+    phpsessid = f.readline().rstrip()
+
 temp_dir = 'temp'
 save_dir = "saved"
 os.makedirs(save_dir, exist_ok=True)
 
+if os.path.exists(temp_dir):
+    shutil.rmtree(temp_dir)
+# 重新创建
+os.makedirs(temp_dir, exist_ok=True)
+
+image_list.clear()
+
 
 # 🌿 当前显示图片
 def get_image(index):
-    if index < len(image_list):
+    if 0 <= index < len(image_list):
         return image_list[index]
     return None
 
 
 # ✅ 保存图片
-def save_image(index):
+def save_image(index, check_box_group):
     if len(image_list) > index >= 0:
         img_path = image_list[index]
         shutil.copy(img_path, save_dir)
+        pid_filter_add(filename_split(os.path.basename(image_list[index])) if 0 <= index < len(image_list) else None,
+                   check_box_group)
 
     index = last_im_process(index)
+    if index == -1:
+        return -1, None, gr.update(value=[])
+    index = skip_pid_filter(index)
+    if index == -1:
+        return -1, None, gr.update(value=[])
 
-    return index + 1, get_image(index + 1)
+    return index, get_image(index), gr.update(value=[])
 
 
 # ❌ 丢弃图片
-def discard_image(index):
-    index = last_im_process(index)
-    return index + 1, get_image(index + 1)
+def discard_image(index, check_box_group):
+    pid_filter_add(filename_split(os.path.basename(image_list[index])) if 0 <= index < len(image_list) else None,
+                   check_box_group)
 
-def search_image(content, r18_filter, r18g_filter, pages):
-    if r18_filter:
-        r18_rem = 0
-    else:
-        r18_rem = 1
-    if r18g_filter:
-        r18g_rem = 0
-    else:
-        r18g_rem = 1
-    image_download(content, phpsessid, r18_rem, r18g_rem, save_dir=temp_dir, last_page=int(pages))
+    index = last_im_process(index)
+    if index == -1:
+        return -1, None, gr.update(value=[])
+    index = skip_pid_filter(index)
+    if index == -1:
+        return -1, None, gr.update(value=[])
+    
+    return index, get_image(index), gr.update(value=[])
+
+def search_image(content, r18_filter, r18g_filter, pages, php):
+    global image_list
+    r18_rem = 0 if r18_filter else 1
+    r18g_rem = 0 if r18g_filter else 1
+
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+    # 重新创建
+    os.makedirs(temp_dir, exist_ok=True)
+
+    image_list.clear()
+
+    image_download(content,
+                   php,
+                   r18_rem,
+                   r18g_rem,
+                   save_dir=temp_dir,
+                   last_page=int(pages),
+                   pids_filter=pids_filter_list
+                   )
 
     im_list = os.listdir(os.path.join(temp_dir, content))
     for file in im_list:
         image_list.append(os.path.abspath(os.path.join(temp_dir, content, file)))
 
-    return 0, get_image(0)
+    index = skip_pid_filter(-1)
+    if index == -1:
+        return -1, None, gr.update(value=[])
+
+    return index, get_image(index), gr.update(value=[])
 
 def last_im_process(index):
 
     if len(image_list) == 0:
         return -1
 
-    if index < -1 or index >= len(image_list):
+    if index < -1:
         return -1
 
+
+    if index >= len(image_list):
+        return len(image_list) - 1
+
     if index == len(image_list) - 1:
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-        # 重新创建
-        os.makedirs(temp_dir, exist_ok=True)
-
-        image_list.clear()
-
         return -1
 
     return index
 
+def pid_filter_add(pid, check_box_group):
+    global pids_filter_list
+    if pid is None:
+        return
+    if 'pid屏蔽' in check_box_group and pid not in pids_filter_list:
+        pids_filter_list.append(pid)
+        with open(pids_filter_dir, 'w') as f:
+            for pid in pids_filter_list:
+                f.write(str(pid) + '\n')
+
+    return
+
+def skip_pid_filter(index):
+    for i in range(index + 1, len(image_list)):
+        pid = filename_split(os.path.basename(image_list[i]))
+        if pid not in pids_filter_list:
+            return i
+    return -1
+
+def filename_split(filename):
+    for i in ['-', '_', '.', '/', '?','!', '&']:
+        filename = filename.split(i)[0]
+    return filename
 
 # 🌸 UI
 with gr.Blocks(title="Pixiv 图片筛选器") as demo:
@@ -94,27 +160,36 @@ with gr.Blocks(title="Pixiv 图片筛选器") as demo:
                                          maximum=20,
                                          value=1,
                                          precision=0)
+            php_textbox = gr.Textbox(label='phpsessid'.upper(), value=phpsessid)
             with gr.Row():
                 R18_rem_check = gr.Checkbox(value=True, label='R18过滤')
                 R18G_rem_check = gr.Checkbox(value=True, label='R18G过滤')
             search_btn = gr.Button("搜索", variant="primary")
 
 
+            with gr.Row():
+                with gr.Column(scale=5):
+                    image = gr.Image(type="filepath", height=800, width=1600)
 
-            image = gr.Image(type="filepath", height=800)
+                with gr.Column(scale=1):
+                    check_boxs = gr.CheckboxGroup(
+                        choices=['pid屏蔽'],
+                        value=[]
+                    )
 
             with gr.Row():
                 save_btn = gr.Button("✅ 保存", variant="primary")
                 discard_btn = gr.Button("❌ 丢弃", variant='stop')
 
             # 初始化
-            if state != 0:
-                demo.load(get_image, inputs=state, outputs=image)
+            demo.load(lambda: default_image, outputs=image)
 
             # 按钮逻辑
-            save_btn.click(save_image, inputs=state, outputs=[state, image])
-            discard_btn.click(discard_image, inputs=state, outputs=[state, image])
-            search_btn.click(search_image, inputs=[key_words, R18_rem_check, R18G_rem_check, search_pages], outputs=[state, image])
+            save_btn.click(save_image, inputs=[state, check_boxs], outputs=[state, image, check_boxs])
+            discard_btn.click(discard_image, inputs=[state, check_boxs], outputs=[state, image, check_boxs])
+            search_btn.click(search_image,
+                             inputs=[key_words, R18_rem_check, R18G_rem_check, search_pages, php_textbox],
+                             outputs=[state, image, check_boxs])
 
 
 demo.launch(theme=gr.themes.Soft(),

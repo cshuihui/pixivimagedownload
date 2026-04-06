@@ -52,6 +52,7 @@ def id_save(name, page, phpsessid):
                     id_list.append(item['id'])
 
                 print(f'获取完成！共{len(id_list)}个pid.')
+                # print(type(id_list[0]))
                 time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
                 break
 

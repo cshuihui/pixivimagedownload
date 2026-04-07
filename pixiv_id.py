@@ -3,7 +3,8 @@ import time
 import random
 
 MaxTryTimes = 5
-
+MIN_WAIT_SECONDS = 0.1
+MAX_WAIT_SECONDS = 0.5
 
 def id_save(name, page, phpsessid):
     url = f'https://www.pixiv.net/ajax/search/artworks/{name}?word=nahida&order=date_d&p='
@@ -33,7 +34,7 @@ def id_save(name, page, phpsessid):
     id_list = []
 
     print(f'正在获取第 {page} 页的pid')
-    time.sleep(random.randint(2, 4))
+    time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
     for times in range(1, MaxTryTimes + 1):
         try:
             response = requests.get(url=url + str(page), headers=headers, cookies=cookies, timeout=(10, 5))
@@ -51,7 +52,8 @@ def id_save(name, page, phpsessid):
                     id_list.append(item['id'])
 
                 print(f'获取完成！共{len(id_list)}个pid.')
-                time.sleep(1)
+                # print(type(id_list[0]))
+                time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
                 break
 
         except requests.exceptions.HTTPError as e:
@@ -64,13 +66,13 @@ def id_save(name, page, phpsessid):
                 break
             else:
                 print(f'HTTP错误：{status}, 信息: {e}')
-            time.sleep(1)
+            time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
         except requests.exceptions.Timeout as e:
             print("连接超时！错误信息：", e)
-            time.sleep(1)
+            time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
         except requests.exceptions.ConnectionError as e:
             print("连接被断开或拒绝，错误信息：", e)
-            time.sleep(1)
+            time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
         except Exception as e:
             print("发生其他错误：", e)
         print(f"正在尝试重连..({times}/{MaxTryTimes})")

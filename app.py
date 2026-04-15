@@ -38,10 +38,10 @@ def get_image(index):
 
 
 # ✅ 保存图片
-def save_image(index, check_box_group):
+def save_image(index, check_box_group, search_con):
     if len(image_list) > index >= 0:
         img_path = image_list[index]
-        shutil.copy(img_path, save_dir)
+        shutil.copy(img_path, os.path.join(save_dir, search_con))
         pid_filter_add(filename_split(os.path.basename(image_list[index])) if 0 <= index < len(image_list) else None,
                    check_box_group)
 
@@ -187,7 +187,7 @@ with gr.Blocks(title="Pixiv 图片筛选器") as demo:
             demo.load(lambda: default_image, outputs=image)
 
             # 按钮逻辑
-            save_btn.click(save_image, inputs=[state, check_boxs], outputs=[state, image, check_boxs])
+            save_btn.click(save_image, inputs=[state, check_boxs, key_words], outputs=[state, image, check_boxs])
             discard_btn.click(discard_image, inputs=[state, check_boxs], outputs=[state, image, check_boxs])
             search_btn.click(search_image,
                              inputs=[key_words, R18_rem_check, R18G_rem_check, search_pages, php_textbox],

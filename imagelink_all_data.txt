@@ -1,0 +1,35 @@
+from response.json()['body']['tags']['tags']
+
+[{'tag': 'GenshinImpact',
+ 'locked': True,
+  'deletable': False,
+   'userId': '126214032',
+    'userName': 'Sheena Jingo'},
+     {'tag': 'HonkaiStarRail',
+      'locked': True,
+      'deletable': False,
+       'userId': '126214032',
+       'userName': 'Sheena Jingo'},
+       {'tag': 'Cyrene',
+       'locked': True,
+       'deletable': False,
+       'userId': '126214032',
+       'userName': 'Sheena Jingo'},
+       {'tag': 'Elysia',
+        'locked': True,
+        'deletable': False,
+        'userId': '126214032',
+        'userName': 'Sheena Jingo'},
+         {'tag': 'nahida',
+         'locked': True,
+         'deletable': False,
+         'userId': '126214032',
+          'userName': 'Sheena Jingo'}]
+
+from response.json()['body']['urls']
+
+{'mini': 'https://i.pximg.net/c/48x48/img-master/img/2026/05/15/22/20/47/144811703_p0_square1200.jpg',
+'thumb': 'https://i.pximg.net/c/250x250_80_a2/img-master/img/2026/05/15/22/20/47/144811703_p0_square1200.jpg',
+ 'small': 'https://i.pximg.net/c/540x540_70/img-master/img/2026/05/15/22/20/47/144811703_p0_master1200.jpg',
+ 'regular': 'https://i.pximg.net/img-master/img/2026/05/15/22/20/47/144811703_p0_master1200.jpg',
+ 'original': 'https://i.pximg.net/img-original/img/2026/05/15/22/20/47/144811703_p0.jpg'}

@@ -2,7 +2,7 @@ import random
 import time
 import requests
 MIN_WAIT_SECONDS = 0.1
-MAX_WAIT_SECONDS = 0.5
+MAX_WAIT_SECONDS = 0.3
 
 def mark_r18_r18g(data):
     result = {'R18': 0, 'R18G': 0}
@@ -48,10 +48,11 @@ def link_find(phpsessid, pid):
     # json_data = response.json()  # json()来自requests可以自动将json解析成字典
 
     if response.status_code == 200:
-        links.update({'link': response.json()['body']['urls']["original"]})
+        links.update({'link': response.json()['body']['urls']["small"]})
+        # links.update({'link': response.json()['body']['urls']["original"]})
         links.update(mark_r18_r18g(response.json()['body']['tags']['tags']))
         print("获取成功！")
-        # print(response.json()['body']['tags']['tags'])
+        # print(response.json()['body']['urls'])
         time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
     else:
         print('获取失败,状态码：', response.status_code)
@@ -63,4 +64,4 @@ if __name__ == '__main__':
     with open("phpsessid.txt", 'r') as f:
         phpsessid = f.read()
     time.sleep(1)
-    print(link_find(phpsessid, '134403445'))
+    print(link_find(phpsessid, '144811703'))

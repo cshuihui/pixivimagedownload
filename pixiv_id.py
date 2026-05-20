@@ -7,7 +7,7 @@ MIN_WAIT_SECONDS = 0.1
 MAX_WAIT_SECONDS = 0.5
 
 def id_save(name, page, phpsessid):
-    url = f'https://www.pixiv.net/ajax/search/artworks/{name}?word=nahida&order=date_d&p='
+    url = f'https://www.pixiv.net/ajax/search/artworks/{name}?word={name}&order=date_d'
 
     cookies = {
         'privacy_policy_agreement': '7',
@@ -85,6 +85,6 @@ if __name__ == '__main__':
     with open("phpsessid.txt", 'r') as f:
         phpsessid = f.read()
     number = list(range(1, 10))
-    random.shuffle(number)
+    # random.shuffle(number)
     for i in number:
         print(id_save('jufufu', page=i, phpsessid=phpsessid))

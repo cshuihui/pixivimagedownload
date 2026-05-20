@@ -6,7 +6,7 @@ import os
 import random
 
 MIN_WAIT_SECONDS = 0.1
-MAX_WAIT_SECONDS = 0.5
+MAX_WAIT_SECONDS = 0.3
 
 def link_to_image(sub_dir, image_name, pid_link, phpsessid):
     headers = {
@@ -33,10 +33,12 @@ def link_to_image(sub_dir, image_name, pid_link, phpsessid):
                  '-lOci6hh5jjnmGdeeUDtZ83WndbyRZtywdaDKC695p7NeoN_PwldsmZy5jHzQvixJ3AL0Qh6'
                  '-LDChj5UOmnQED8Uabak_FUQVkPUhfScRtxhYTmUlYI-w%3D%3D%22%5D%5D',
     }
-    for i in range(1, 4):
+    max_retries = 5
+
+    for i in range(max_retries):
 
         try:
-            response = requests.get(pid_link, headers=headers, timeout=10, cookies=cookies)
+            response = requests.get(pid_link, headers=headers, timeout=(10, 60), cookies=cookies)
             if response.status_code == 200:
 
                 with open(sub_dir + '/' + image_name, "wb") as f:
@@ -50,11 +52,27 @@ def link_to_image(sub_dir, image_name, pid_link, phpsessid):
                     break
                 print(f"正在进行第{i}次尝试...")
                 time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
+        except requests.exceptions.ConnectionError as e:
+            # 检测反爬导致的连接错误
+            if "10054" in str(e) or "Connection aborted" in str(e):
+                if i < max_retries - 1:
+                    wait_time = 2 * (i + 1)
+                    print(f"检测到反爬，等待 {wait_time} 秒后重试... (第{i + 1}/{max_retries}次)")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"反爬重试失败: {image_name}")
+                    break
+            else:
+                print(f"连接错误: {e}")
+                continue
 
         except requests.exceptions.Timeout:
             print("请求超时!")
+            continue
         except requests.exceptions.RequestException as e:
             print(f"请求错误, 错误信息: {e}")
+            continue
 
     return False
 
@@ -127,24 +145,24 @@ def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(sub_dir, exist_ok=True)
 
-    cookies = {
-        'first_visit_datetime_pc': '2024-07-04%2020%3A04%3A52',  # 第一次访问的时间
-        'privacy_policy_agreement': '7',
-        'privacy_policy_notification': '0',
-        'PHPSESSID': f'{phpsessid}',
-        'login_ever': 'yes',
-        '_cfuvid': 'jVYZtt9rfVhgTI8XhlQ4tqvr4eTFlul4iorbL_pt5u0-1750922757338-0.0.1.1-604800000',
-        '__cf_bm': 'P9YZKweTbQzR8FxFJ2.QDk9V1xNZ7QHt55ppCJ.YcYs-1750938795-1.0.1.1-D5ThH518RaP1fWYgzZ41dJ.7_15bjiJAmth'
-                   'wyGVuhdJsXzu90wqpCGMIUdQBXD7UivnwxLYcZw2sG0aUdXIgsLPmj0qKa7GA98BwNh58.EYFPhaxda.LXGBfGxMtfsLI',
-        'cf_clearance': 't0DJAEbiWF308crA1KSG7UJjZhg1ZHY8m6tg0AwQYUw-1750940233-1.2.1.1-AO0LKVkdab7nJhB7Q_jJI7E9fw.o3'
-                        'm0TZB7GHrnJH1iY_5ICnIyfJKgEMMYEpOR3RCNvK29R17ViIUvj7aOO7lLnJkizJP.pcWyLStlpf2niHUncfcoQ.PIPEc'
-                        'Fh06vKaFjrKNG.zys9gIBmmnY3FLmL7FQeFJ2I4QbxHMEPZK1.e5QexBiG0x.nY4vixunY7y7xbyfulV3PTLOYmI4EKxk'
-                        '7mPumiDDTzf.BtnN0jZn53A__MsEGByq_7fcnhgv.Mn.U.0iGsAD_3jrGRiBpOPMQG5kUE.TJiYh7Pyhl7OSCRL2v.s'
-                        'W5S3eDXz767IpNRXiaIDBOO16oWyo3wfQ7liXJ2mTHEWu9BKxaJwIoUgM',
-        'FCNEC': '%5B%5B%22AKsRol96Mr97eRWudXD3Lv7jAVi6BNagvWCFvaRGzH4Kh'
-                 '-lOci6hh5jjnmGdeeUDtZ83WndbyRZtywdaDKC695p7NeoN_PwldsmZy5jHzQvixJ3AL0Qh6'
-                 '-LDChj5UOmnQED8Uabak_FUQVkPUhfScRtxhYTmUlYI-w%3D%3D%22%5D%5D',
-    }
+    # cookies = {
+    #     'first_visit_datetime_pc': '2024-07-04%2020%3A04%3A52',  # 第一次访问的时间
+    #     'privacy_policy_agreement': '7',
+    #     'privacy_policy_notification': '0',
+    #     'PHPSESSID': f'{phpsessid}',
+    #     'login_ever': 'yes',
+    #     '_cfuvid': 'jVYZtt9rfVhgTI8XhlQ4tqvr4eTFlul4iorbL_pt5u0-1750922757338-0.0.1.1-604800000',
+    #     '__cf_bm': 'P9YZKweTbQzR8FxFJ2.QDk9V1xNZ7QHt55ppCJ.YcYs-1750938795-1.0.1.1-D5ThH518RaP1fWYgzZ41dJ.7_15bjiJAmth'
+    #                'wyGVuhdJsXzu90wqpCGMIUdQBXD7UivnwxLYcZw2sG0aUdXIgsLPmj0qKa7GA98BwNh58.EYFPhaxda.LXGBfGxMtfsLI',
+    #     'cf_clearance': 't0DJAEbiWF308crA1KSG7UJjZhg1ZHY8m6tg0AwQYUw-1750940233-1.2.1.1-AO0LKVkdab7nJhB7Q_jJI7E9fw.o3'
+    #                     'm0TZB7GHrnJH1iY_5ICnIyfJKgEMMYEpOR3RCNvK29R17ViIUvj7aOO7lLnJkizJP.pcWyLStlpf2niHUncfcoQ.PIPEc'
+    #                     'Fh06vKaFjrKNG.zys9gIBmmnY3FLmL7FQeFJ2I4QbxHMEPZK1.e5QexBiG0x.nY4vixunY7y7xbyfulV3PTLOYmI4EKxk'
+    #                     '7mPumiDDTzf.BtnN0jZn53A__MsEGByq_7fcnhgv.Mn.U.0iGsAD_3jrGRiBpOPMQG5kUE.TJiYh7Pyhl7OSCRL2v.s'
+    #                     'W5S3eDXz767IpNRXiaIDBOO16oWyo3wfQ7liXJ2mTHEWu9BKxaJwIoUgM',
+    #     'FCNEC': '%5B%5B%22AKsRol96Mr97eRWudXD3Lv7jAVi6BNagvWCFvaRGzH4Kh'
+    #              '-lOci6hh5jjnmGdeeUDtZ83WndbyRZtywdaDKC695p7NeoN_PwldsmZy5jHzQvixJ3AL0Qh6'
+    #              '-LDChj5UOmnQED8Uabak_FUQVkPUhfScRtxhYTmUlYI-w%3D%3D%22%5D%5D',
+    # }
     # max_download_times = 5
     for pages in range(start_page, last_page + 1):
 
@@ -164,7 +182,7 @@ def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1
             print(f"正在下载 {image_name} ({index}/{len(pid_list)})")
             for i in range(0, 15):
                 temp_list = list(image_name)
-                temp_list[image_name.find('.')-1] = str(i)
+                temp_list[image_name.find('p')+1] = str(i)
                 temp_name = ''.join(temp_list)  # 列表转字符串
                 print(temp_name)
                 temp_link = pid_links['link'].replace(image_name, temp_name)

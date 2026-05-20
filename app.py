@@ -171,7 +171,7 @@ with gr.Blocks(title="Pixiv 图片筛选器") as demo:
 
             with gr.Row():
                 with gr.Column(scale=5):
-                    image = gr.Image(type="filepath", height=800, width=1600)
+                    image = gr.Image(type="filepath", height=800, width=1600, interactive=False)
 
                 with gr.Column(scale=1):
                     check_boxs = gr.CheckboxGroup(
@@ -192,6 +192,49 @@ with gr.Blocks(title="Pixiv 图片筛选器") as demo:
             search_btn.click(search_image,
                              inputs=[key_words, R18_rem_check, R18G_rem_check, search_pages, php_textbox],
                              outputs=[state, image, check_boxs])
+
+    with gr.TabItem("纳西妲专用筛选器"):
+        with gr.Column():
+            state = gr.State(0)
+
+            with gr.Row():
+                with gr.Column(scale=5):
+                    image = gr.Image(type="filepath", height=800, width=1600, interactive=False)
+
+                with gr.Column(scale=1):
+                    with gr.Column():
+                        check_boxs = gr.CheckboxGroup(
+                            choices=['pid屏蔽'],
+                            value=[]
+                        )
+                        R18_rem_check = gr.Checkbox(value=True, label='R18过滤')
+                        R18G_rem_check = gr.Checkbox(value=True, label='R18G过滤')
+                        search_pages = gr.Number(label="搜索页数",
+                                                 minimum=1,
+                                                 maximum=20,
+                                                 value=1,
+                                                 precision=0)
+                        search_btn = gr.Button("搜索", variant="primary")
+            with gr.Row():
+                save_btn = gr.Button("✅ 保存", variant="primary")
+                discard_btn = gr.Button("❌ 丢弃", variant='stop')
+
+            with gr.Row():
+                search_box = gr.Dropdown(label="搜索内容", choices=['nahida', '纳西妲', 'ナヒーダ'], interactive=True)
+
+                model_identify = gr.Checkbox(value=False, label="模型识别")
+
+
+            php_textbox = gr.Textbox(label='phpsessid'.upper(), value=phpsessid)
+
+
+            search_btn.click(search_image,
+                             inputs=[search_box, R18_rem_check, R18G_rem_check, search_pages, php_textbox],
+                             outputs=[state, image, check_boxs])
+            discard_btn.click(discard_image, inputs=[state, check_boxs], outputs=[state, image, check_boxs])
+            save_btn.click(save_image, inputs=[state, check_boxs], outputs=[state, image, check_boxs])
+
+
 
 
 demo.launch(theme=gr.themes.Soft(),

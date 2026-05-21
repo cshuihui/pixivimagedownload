@@ -7,7 +7,7 @@ MIN_WAIT_SECONDS = 0.1
 MAX_WAIT_SECONDS = 0.5
 
 def id_save(name, page, phpsessid):
-    url = f'https://www.pixiv.net/ajax/search/artworks/{name}?word={name}&order=date_d'
+    url = f'https://www.pixiv.net/ajax/search/artworks/{name}?word={name}&order=date_d&p='
 
     cookies = {
         'privacy_policy_agreement': '7',

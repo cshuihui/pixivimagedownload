@@ -86,8 +86,10 @@ def discard_image(index, check_box_group):
 def search_image(content, r18_filter, r18g_filter, pages, php):
     global image_list
 
-    if content is None or content == '':
+    if content is None or str(content).strip() == '':
+        gr.Warning("请输入搜索关键词")
         return 0, default_image, gr.update(value=[])
+
     r18_rem = 0 if r18_filter else 1
     r18g_rem = 0 if r18g_filter else 1
 

@@ -37,7 +37,7 @@ def id_save(name, page, phpsessid):
     time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
     for times in range(1, MaxTryTimes + 1):
         try:
-            response = requests.get(url=url + str(page), headers=headers, cookies=cookies, timeout=(10, 5))
+            response = requests.get(url=url + str(page), headers=headers, cookies=cookies, timeout=(10, 60))
             #   连接10秒 读取5秒
 
             response.raise_for_status()  # 主动出发异常才会被try捕捉

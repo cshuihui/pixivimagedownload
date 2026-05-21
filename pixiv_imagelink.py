@@ -3,6 +3,8 @@ import time
 import requests
 MIN_WAIT_SECONDS = 0.1
 MAX_WAIT_SECONDS = 0.3
+image_quality = ['mini', 'thumb', 'small', 'regular', 'original']
+
 
 def mark_r18_r18g(data):
     result = {'R18': 0, 'R18G': 0}
@@ -12,7 +14,9 @@ def mark_r18_r18g(data):
         elif d['tag'] == 'R-18G':
             result['R18G'] = 1
     return result
-def link_find(phpsessid, pid):
+
+
+def link_find(phpsessid, pid, quality):
     links = dict()
     print('开始获取pid直链')
 
@@ -48,7 +52,7 @@ def link_find(phpsessid, pid):
     # json_data = response.json()  # json()来自requests可以自动将json解析成字典
 
     if response.status_code == 200:
-        links.update({'link': response.json()['body']['urls']["small"]})
+        links.update({'link': response.json()['body']['urls'][image_quality[quality]]})
         # links.update({'link': response.json()['body']['urls']["original"]})
         links.update(mark_r18_r18g(response.json()['body']['tags']['tags']))
         print("获取成功！")
@@ -64,4 +68,4 @@ if __name__ == '__main__':
     with open("phpsessid.txt", 'r') as f:
         phpsessid = f.read()
     time.sleep(1)
-    print(link_find(phpsessid, '144811703'))
+    print(link_find(phpsessid, '144811703', quality=2))

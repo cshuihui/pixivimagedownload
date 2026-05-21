@@ -1,12 +1,16 @@
 import requests
+import urllib3
+
 import pixiv_id
 import pixiv_imagelink
 import time
 import os
 import random
+import re
 
 MIN_WAIT_SECONDS = 0.1
 MAX_WAIT_SECONDS = 0.3
+
 
 def link_to_image(sub_dir, image_name, pid_link, phpsessid):
     headers = {
@@ -39,6 +43,7 @@ def link_to_image(sub_dir, image_name, pid_link, phpsessid):
 
         try:
             response = requests.get(pid_link, headers=headers, timeout=(10, 60), cookies=cookies)
+            # timeout(连接时间，读取时间)
             if response.status_code == 200:
 
                 with open(sub_dir + '/' + image_name, "wb") as f:
@@ -52,7 +57,7 @@ def link_to_image(sub_dir, image_name, pid_link, phpsessid):
                     break
                 print(f"正在进行第{i}次尝试...")
                 time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
-        except requests.exceptions.ConnectionError as e:
+        except (requests.exceptions.ConnectionError, urllib3.exceptions.ProtocolError, ConnectionResetError) as e:
             # 检测反爬导致的连接错误
             if "10054" in str(e) or "Connection aborted" in str(e):
                 if i < max_retries - 1:
@@ -138,7 +143,28 @@ def user_input():
     # 在 while 里定义的变量 start_page，它其实是整个函数 user_input() 的局部变量。
 
 
-def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1, save_dir='download', pids_filter=None):
+def filename_extract_index(filename):
+    pattern = r'(_p)(\d+)'
+    match = re.search(pattern, filename)
+    if match:
+        return match.group(2)
+
+
+def filename_replace_index(filename, new_index):
+    """
+    将文件名中的页码替换为新页码
+    例如: '143035291_p0.jpg' -> '143035291_p5.jpg'
+          '143035291_p12.jpg' -> '143035291_p15.jpg'
+    """
+    # 匹配 _p 后跟数字的模式
+    pattern = r'(_p)(\d+)'
+    replacement = rf'\g<1>{new_index}'
+
+    new_filename = re.sub(pattern, replacement, filename)
+    return new_filename
+
+
+def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1, save_dir='download', pids_filter=None, quality=4):
     if pids_filter is None:
         pids_filter = []
     sub_dir = os.path.join(save_dir, name)  # download/nahida os会自动处理是 / 还是 \
@@ -174,16 +200,14 @@ def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1
             if pid in pids_filter:
                 print(pid, '已过滤(用户选择)')
                 continue
-            pid_links = pixiv_imagelink.link_find(phpsessid, pid)
+            pid_links = pixiv_imagelink.link_find(phpsessid, pid, quality)
             if pid_links['R18'] != r18_rem or pid_links['R18G'] != r18g_rem:
                 print(pid, '已过滤(r18/r18g类型)')
                 continue
             image_name = pid_links['link'].split(sep='/')[-1]
             print(f"正在下载 {image_name} ({index}/{len(pid_list)})")
             for i in range(0, 15):
-                temp_list = list(image_name)
-                temp_list[image_name.find('p')+1] = str(i)
-                temp_name = ''.join(temp_list)  # 列表转字符串
+                temp_name = filename_replace_index(image_name, new_index=i)
                 print(temp_name)
                 temp_link = pid_links['link'].replace(image_name, temp_name)
                 if not link_to_image(sub_dir, temp_name, temp_link, phpsessid):

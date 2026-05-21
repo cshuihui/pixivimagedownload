@@ -1,7 +1,8 @@
 import gradio as gr
 import os
 import shutil
-from pixiv_image_download import image_download
+from pixiv_image_download import image_download, link_to_image, filename_replace_index, filename_extract_index
+from pixiv_imagelink import link_find
 import numpy as np
 
 # 👉 假设这是你爬取后的图片路径列表
@@ -38,12 +39,24 @@ def get_image(index):
 
 
 # ✅ 保存图片
-def save_image(index, check_box_group, search_con):
+def save_image(index, check_box_group, search_con, php):
     if len(image_list) > index >= 0:
         img_path = image_list[index]
-        shutil.copy(img_path, os.path.join(save_dir, search_con))
-        pid_filter_add(filename_split(os.path.basename(image_list[index])) if 0 <= index < len(image_list) else None,
-                   check_box_group)
+        temp_save_dir = os.path.join(save_dir, search_con)
+        os.makedirs(temp_save_dir, exist_ok=True)
+
+        image_filename = os.path.basename(img_path)
+        image_index = filename_extract_index(image_filename)
+        pid = filename_split(image_filename)
+        link = link_find(php, pid, quality=4)["link"]
+        org_image_filename = filename_replace_index(link.split('/')[-1], image_index)
+
+        image_link = '/'.join(link.split('/')[:-1]) + '/' + org_image_filename
+        print()
+        link_to_image(temp_save_dir, org_image_filename, image_link, php)
+        # shutil.copy(img_path, os.path.join(save_dir, search_con))  # 这里是把存在temp里的图复制到saved的文件夹
+        pid_filter_add(pid, check_box_group)
+        #                                     提取文件名
 
     index = last_im_process(index)
     if index == -1:
@@ -57,8 +70,8 @@ def save_image(index, check_box_group, search_con):
 
 # ❌ 丢弃图片
 def discard_image(index, check_box_group):
-    pid_filter_add(filename_split(os.path.basename(image_list[index])) if 0 <= index < len(image_list) else None,
-                   check_box_group)
+    if 0 <= index < len(image_list):
+        pid_filter_add(filename_split(os.path.basename(image_list[index])), check_box_group)
 
     index = last_im_process(index)
     if index == -1:
@@ -66,11 +79,15 @@ def discard_image(index, check_box_group):
     index = skip_pid_filter(index)
     if index == -1:
         return -1, None, gr.update(value=[])
-    
+
     return index, get_image(index), gr.update(value=[])
+
 
 def search_image(content, r18_filter, r18g_filter, pages, php):
     global image_list
+
+    if content is None or content == '':
+        return 0, default_image, gr.update(value=[])
     r18_rem = 0 if r18_filter else 1
     r18g_rem = 0 if r18g_filter else 1
 
@@ -87,7 +104,8 @@ def search_image(content, r18_filter, r18g_filter, pages, php):
                    r18g_rem,
                    save_dir=temp_dir,
                    last_page=int(pages),
-                   pids_filter=pids_filter_list
+                   pids_filter=pids_filter_list,
+                   quality=2
                    )
 
     im_list = os.listdir(os.path.join(temp_dir, content))
@@ -98,16 +116,16 @@ def search_image(content, r18_filter, r18g_filter, pages, php):
     if index == -1:
         return -1, None, gr.update(value=[])
 
+    print('下载序列结束.')
     return index, get_image(index), gr.update(value=[])
 
-def last_im_process(index):
 
+def last_im_process(index):
     if len(image_list) == 0:
         return -1
 
     if index < -1:
         return -1
-
 
     if index >= len(image_list):
         return len(image_list) - 1
@@ -116,6 +134,7 @@ def last_im_process(index):
         return -1
 
     return index
+
 
 def pid_filter_add(pid, check_box_group):
     global pids_filter_list
@@ -129,6 +148,7 @@ def pid_filter_add(pid, check_box_group):
 
     return
 
+
 def skip_pid_filter(index):
     for i in range(index + 1, len(image_list)):
         pid = filename_split(os.path.basename(image_list[i]))
@@ -136,10 +156,12 @@ def skip_pid_filter(index):
             return i
     return -1
 
+
 def filename_split(filename):
-    for i in ['-', '_', '.', '/', '?','!', '&']:
+    for i in ['-', '_', '.', '/', '?', '!', '&']:
         filename = filename.split(i)[0]
     return filename
+
 
 # 🌸 UI
 with gr.Blocks(title="Pixiv 图片筛选器") as demo:
@@ -168,7 +190,6 @@ with gr.Blocks(title="Pixiv 图片筛选器") as demo:
                 R18G_rem_check = gr.Checkbox(value=True, label='R18G过滤')
             search_btn = gr.Button("搜索", variant="primary")
 
-
             with gr.Row():
                 with gr.Column(scale=5):
                     image = gr.Image(type="filepath", height=800, width=1600, interactive=False)
@@ -187,55 +208,56 @@ with gr.Blocks(title="Pixiv 图片筛选器") as demo:
             demo.load(lambda: default_image, outputs=image)
 
             # 按钮逻辑
-            save_btn.click(save_image, inputs=[state, check_boxs, key_words], outputs=[state, image, check_boxs])
+            save_btn.click(save_image,
+                           inputs=[state, check_boxs, key_words, php_textbox],
+                           outputs=[state, image, check_boxs])
             discard_btn.click(discard_image, inputs=[state, check_boxs], outputs=[state, image, check_boxs])
             search_btn.click(search_image,
                              inputs=[key_words, R18_rem_check, R18G_rem_check, search_pages, php_textbox],
                              outputs=[state, image, check_boxs])
 
+# 变量名还是不要重复
     with gr.TabItem("纳西妲专用筛选器"):
         with gr.Column():
-            state = gr.State(0)
+            state2 = gr.State(0)
 
             with gr.Row():
                 with gr.Column(scale=5):
-                    image = gr.Image(type="filepath", height=800, width=1600, interactive=False)
+                    image2 = gr.Image(type="filepath", height=800, width=1600, interactive=False)
 
                 with gr.Column(scale=1):
                     with gr.Column():
-                        check_boxs = gr.CheckboxGroup(
+                        check_boxs2 = gr.CheckboxGroup(
                             choices=['pid屏蔽'],
                             value=[]
                         )
-                        R18_rem_check = gr.Checkbox(value=True, label='R18过滤')
-                        R18G_rem_check = gr.Checkbox(value=True, label='R18G过滤')
-                        search_pages = gr.Number(label="搜索页数",
-                                                 minimum=1,
-                                                 maximum=20,
-                                                 value=1,
-                                                 precision=0)
-                        search_btn = gr.Button("搜索", variant="primary")
+                        R18_rem_check2 = gr.Checkbox(value=True, label='R18过滤')
+                        R18G_rem_check2 = gr.Checkbox(value=True, label='R18G过滤')
+                        search_pages2 = gr.Number(label="搜索页数",
+                                                  minimum=1,
+                                                  maximum=20,
+                                                  value=1,
+                                                  precision=0)
+                        search_btn2 = gr.Button("搜索", variant="primary")
             with gr.Row():
-                save_btn = gr.Button("✅ 保存", variant="primary")
-                discard_btn = gr.Button("❌ 丢弃", variant='stop')
+                save_btn2 = gr.Button("✅ 保存", variant="primary")
+                discard_btn2 = gr.Button("❌ 丢弃", variant='stop')
 
             with gr.Row():
                 search_box = gr.Dropdown(label="搜索内容", choices=['nahida', '纳西妲', 'ナヒーダ'], interactive=True)
 
-                model_identify = gr.Checkbox(value=False, label="模型识别")
+                model_identify2 = gr.Checkbox(value=False, label="模型识别")
 
+            php_textbox2 = gr.Textbox(label='phpsessid'.upper(), value=phpsessid)
 
-            php_textbox = gr.Textbox(label='phpsessid'.upper(), value=phpsessid)
-
-
-            search_btn.click(search_image,
-                             inputs=[search_box, R18_rem_check, R18G_rem_check, search_pages, php_textbox],
-                             outputs=[state, image, check_boxs])
-            discard_btn.click(discard_image, inputs=[state, check_boxs], outputs=[state, image, check_boxs])
-            save_btn.click(save_image, inputs=[state, check_boxs], outputs=[state, image, check_boxs])
-
-
-
+            save_filename = gr.Textbox(value='纳西妲', visible=False, interactive=False)
+            search_btn2.click(search_image,
+                              inputs=[search_box, R18_rem_check2, R18G_rem_check2, search_pages2, php_textbox2],
+                              outputs=[state2, image2, check_boxs2])
+            discard_btn2.click(discard_image, inputs=[state2, check_boxs2], outputs=[state2, image2, check_boxs2])
+            save_btn2.click(save_image,
+                            inputs=[state2, check_boxs2, save_filename, php_textbox2],
+                            outputs=[state2, image2, check_boxs2])
 
 demo.launch(theme=gr.themes.Soft(),
             pwa=False,

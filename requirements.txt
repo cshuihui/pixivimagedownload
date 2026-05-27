@@ -34,6 +34,7 @@ markdown-it-py==4.0.0
 MarkupSafe==3.0.3
 mdurl==0.1.2
 numpy==2.4.4
+opencv-python==4.13.0.92
 orjson==3.11.8
 packaging==26.0
 pandas==3.0.2

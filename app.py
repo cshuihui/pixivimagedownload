@@ -4,6 +4,7 @@ import shutil
 from pixiv_image_download import image_download, link_to_image, filename_replace_index, filename_extract_index
 from pixiv_imagelink import link_find
 import numpy as np
+import requests
 
 # 👉 假设这是你爬取后的图片路径列表
 image_list = []
@@ -29,7 +30,10 @@ if os.path.exists(temp_dir):
 os.makedirs(temp_dir, exist_ok=True)
 
 image_list.clear()
-
+pixiv_connect_status = {
+    'connected': True,
+    'not_connect': False,
+}
 
 # 🌿 当前显示图片
 def get_image(index):
@@ -164,6 +168,24 @@ def filename_split(filename):
         filename = filename.split(i)[0]
     return filename
 
+def check_pixiv(php_id):
+    try:
+        response = requests.get(
+            "https://www.pixiv.net/ajax/user/extra",
+            cookies={"PHPSESSID": phpsessid},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            return "✅ 连接成功", "✅ 连接成功"
+        else:
+            return f"❌ 连接失败，状态码: {response.status_code}", f"❌ 连接失败，状态码: {response.status_code}"
+    except requests.exceptions.Timeout:
+        return "❌ 连接超时", "❌ 连接超时"
+    except Exception as e:
+        return f"❌ 连接失败: {e}", f"❌ 连接失败: {e}"
+
+
 
 # 🌸 UI
 with gr.Blocks(title="Pixiv 图片筛选器") as demo:
@@ -176,6 +198,8 @@ with gr.Blocks(title="Pixiv 图片筛选器") as demo:
     gr.Markdown("""
     ###总标题
     """)
+
+    shared_phpsessid = gr.State(phpsessid)
     with gr.TabItem("筛选器"):
         with gr.Column():
             state = gr.State(0)  # 能记住状态的变量 专门用来在 UI 交互中保存数据
@@ -186,7 +210,7 @@ with gr.Blocks(title="Pixiv 图片筛选器") as demo:
                                          maximum=20,
                                          value=1,
                                          precision=0)
-            php_textbox = gr.Textbox(label='phpsessid'.upper(), value=phpsessid)
+            php_textbox = gr.Textbox(label='phpsessid'.upper(), value=shared_phpsessid.value)
             with gr.Row():
                 R18_rem_check = gr.Checkbox(value=True, label='R18过滤')
                 R18G_rem_check = gr.Checkbox(value=True, label='R18G过滤')
@@ -250,7 +274,7 @@ with gr.Blocks(title="Pixiv 图片筛选器") as demo:
 
                 model_identify2 = gr.Checkbox(value=False, label="模型识别")
 
-            php_textbox2 = gr.Textbox(label='phpsessid'.upper(), value=phpsessid)
+            php_textbox2 = gr.Textbox(label='phpsessid'.upper(), value=shared_phpsessid.value)
 
             save_filename = gr.Textbox(value='纳西妲', visible=False, interactive=False)
             search_btn2.click(search_image,
@@ -260,6 +284,10 @@ with gr.Blocks(title="Pixiv 图片筛选器") as demo:
             save_btn2.click(save_image,
                             inputs=[state2, check_boxs2, save_filename, php_textbox2],
                             outputs=[state2, image2, check_boxs2])
+
+    # phpsessid 文本框更新机制
+    php_textbox.change(lambda x: x, inputs=php_textbox, outputs=php_textbox2)
+    php_textbox2.change(lambda x: x, inputs=php_textbox2, outputs=php_textbox)
 
 demo.launch(theme=gr.themes.Soft(),
             pwa=False,

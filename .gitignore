@@ -4,3 +4,12 @@
 download
 saved
 temp
+msedgedriver.exe
+/datasets
+*.pth
+model/__pycache__
+.gradio
+dist
+build
+Pixiv图片筛选器.spec
+release

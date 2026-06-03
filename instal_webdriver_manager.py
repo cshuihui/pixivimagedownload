@@ -1,17 +1,31 @@
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
 import os
 import shutil
+import sys
 from selenium.webdriver.edge.service import Service
 
 
-file_dir = os.path.dirname(__file__)
+def get_cache_dir():
+    """获取持久化缓存目录（优先 exe 所在目录，回退到用户缓存目录）"""
+    # 打包后：exe 所在目录（可写、持久）
+    if getattr(sys, 'frozen', False):
+        base = os.path.dirname(sys.executable)
+    else:
+        # 开发环境：项目根目录
+        base = os.path.dirname(os.path.abspath(__file__))
+    return base
+
+
+cache_dir = get_cache_dir()
 
 
 def install_edge_webdriver():
-    if "msedgedriver.exe" in os.listdir(file_dir):
-        return Service(os.path.join(file_dir, "msedgedriver.exe"))
+    driver_path = os.path.join(cache_dir, "msedgedriver.exe")
+    if os.path.exists(driver_path):
+        return Service(driver_path)
+
     driver_dir = EdgeChromiumDriverManager().install()
-    local_path = os.path.join(file_dir, "msedgedriver.exe")
+    local_path = os.path.join(cache_dir, "msedgedriver.exe")
 
     if not os.path.exists(local_path):
         shutil.copy(driver_dir, local_path)
@@ -20,4 +34,4 @@ def install_edge_webdriver():
     return Service(local_path)
 
 if __name__ == "__main__":
-    print(os.path.dirname(__file__))
+    print(cache_dir)

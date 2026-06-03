@@ -20,10 +20,33 @@ import requests
 # ==================== 初始化变量 ====================
 MIN_WAIT_SECONDS = 0.1
 MAX_WAIT_SECONDS = 0.3
-default_image = '143035291_p0.jpg'
-pids_filter_dir = 'pids_filter.txt'
+
+
+def resource_path(relative_path):
+    """获取打包后资源文件的路径（兼容 PyInstaller，只读）"""
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+
+def data_path(relative_path):
+    """获取可写数据文件的路径（当前工作目录，用于运行时修改的文件）"""
+    return os.path.join(os.path.abspath("."), relative_path)
+
+
+default_image = resource_path('143035291_p0.jpg')
+pids_filter_dir = data_path('pids_filter.txt')
+phpsessid_file = data_path('phpsessid.txt')
 temp_dir = 'temp'
 save_dir = 'saved'
+
+# 读取 pids_filter.txt（优先当前目录，不存在则从打包目录复制默认文件）
+if not os.path.exists(pids_filter_dir):
+    src = resource_path('pids_filter.txt')
+    if os.path.exists(src):
+        shutil.copy2(src, pids_filter_dir)
 
 with open(pids_filter_dir, 'a+') as f:
     f.seek(0)
@@ -31,7 +54,14 @@ with open(pids_filter_dir, 'a+') as f:
     if pids_filter_list == ['']:
         pids_filter_list = []
 
-with open('phpsessid.txt', 'r') as f:
+# 读取 phpsessid.txt（优先当前目录，不存在则从打包目录复制默认文件）
+if not os.path.exists(phpsessid_file):
+    src = resource_path('phpsessid.txt')
+    if os.path.exists(src):
+        shutil.copy2(src, phpsessid_file)
+
+with open(phpsessid_file, 'a+') as f:
+    f.seek(0)
     phpsessid = f.readline().rstrip()
 
 os.makedirs(save_dir, exist_ok=True)
@@ -629,7 +659,7 @@ class PixivFilterApp(QMainWindow):
 
         if success:
             # 写入文件并禁用获取按钮
-            with open('phpsessid.txt', 'w') as f:
+            with open(phpsessid_file, 'w') as f:
                 f.write(php)
             self.get_php_btn.setEnabled(False)
             self.php_status_label.setText("✅ 已保存到 phpsessid.txt")
@@ -655,7 +685,7 @@ class PixivFilterApp(QMainWindow):
 
     def _set_app_icon(self):
         """设置窗口图标（使用 pixiv.ico）"""
-        ico_path = os.path.join(os.path.dirname(__file__), "pixiv.ico")
+        ico_path = resource_path("pixiv.ico")
         if os.path.exists(ico_path):
             self.setWindowIcon(QIcon(ico_path))
 

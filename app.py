@@ -17,7 +17,8 @@ with open(pids_filter_dir, 'a+') as f:  # 用a+文件指针会在文件末尾，
     if pids_filter_list == ['']:
         pids_filter_list = []
 
-with open('phpsessid.txt', 'r') as f:
+with open('phpsessid.txt', 'a+') as f:
+    f.seek(0)
     phpsessid = f.readline().rstrip()
 
 temp_dir = 'temp'

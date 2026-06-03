@@ -1,7 +1,7 @@
 import gradio as gr
 import os
 import shutil
-from pixiv_image_download import image_download, link_to_image, filename_replace_index, filename_extract_index
+from pixiv_image_download import image_download, link_to_image, filename_extract_index
 from pixiv_imagelink import link_find
 import numpy as np
 import requests
@@ -50,17 +50,17 @@ def save_image(index, check_box_group, search_con, php):
         os.makedirs(temp_save_dir, exist_ok=True)
 
         image_filename = os.path.basename(img_path)
-        image_index = filename_extract_index(image_filename)
+        idx_str = filename_extract_index(image_filename)
         pid = filename_split(image_filename)
-        link = link_find(php, pid, quality=4)["link"]
-        org_image_filename = filename_replace_index(link.split('/')[-1], image_index)
+        pid_links = link_find(php, pid, quality=4)
 
-        image_link = '/'.join(link.split('/')[:-1]) + '/' + org_image_filename
-        print()
-        link_to_image(temp_save_dir, org_image_filename, image_link, php)
-        # shutil.copy(img_path, os.path.join(save_dir, search_con))  # 这里是把存在temp里的图复制到saved的文件夹
+        # 提取页码，找不到则默认下载第1页
+        image_index = int(idx_str) if idx_str is not None else 0
+        page_url = pid_links['links'][image_index + 1]['original']
+        page_name = page_url.split('/')[-1]
+        link_to_image(temp_save_dir, page_name, page_url, php)
+
         pid_filter_add(pid, check_box_group)
-        #                                     提取文件名
 
     index = last_im_process(index)
     if index == -1:

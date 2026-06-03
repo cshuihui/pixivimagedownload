@@ -52,11 +52,25 @@ def link_find(phpsessid, pid, quality):
     # json_data = response.json()  # json()来自requests可以自动将json解析成字典
 
     if response.status_code == 200:
-        links.update({'link': response.json()['body']['urls'][image_quality[quality]]})
-        # links.update({'link': response.json()['body']['urls']["original"]})
-        links.update(mark_r18_r18g(response.json()['body']['tags']['tags']))
+        body = response.json()['body']
+        links.update(mark_r18_r18g(body['tags']['tags']))
+        page_count = body.get('pageCount', 1)
+        links.update({'pageCount': page_count})
+
+        # 获取各页所有质量的链接字典 { 页码: { 质量: URL } }
+        time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
+        pages_resp = requests.get(
+            url=f'https://www.pixiv.net/ajax/illust/{pid}/pages',
+            headers=headers, cookies=cookies
+        )
+        if pages_resp.status_code == 200:
+            pages_data = pages_resp.json().get('body', [])
+            pages_dict = {}
+            for i, page in enumerate(pages_data):
+                pages_dict[i + 1] = page.get('urls', {})
+            links.update({'links': pages_dict})
+
         print("获取成功！")
-        # print(response.json()['body']['urls'])
         time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
     else:
         print('获取失败,状态码：', response.status_code)
@@ -65,7 +79,8 @@ def link_find(phpsessid, pid, quality):
 
 
 if __name__ == '__main__':
+    import json
     with open("phpsessid.txt", 'r') as f:
         phpsessid = f.read()
-    time.sleep(1)
-    print(link_find(phpsessid, '144811703', quality=2))
+    result = link_find(phpsessid, '144811703', quality=2)
+    print(json.dumps(result, indent=2, ensure_ascii=False))

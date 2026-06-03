@@ -204,13 +204,13 @@ def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1
             if pid_links['R18'] != r18_rem or pid_links['R18G'] != r18g_rem:
                 print(pid, '已过滤(r18/r18g类型)')
                 continue
-            image_name = pid_links['link'].split(sep='/')[-1]
-            print(f"正在下载 {image_name} ({index}/{len(pid_list)})")
-            for i in range(0, 15):
-                temp_name = filename_replace_index(image_name, new_index=i)
-                print(temp_name)
-                temp_link = pid_links['link'].replace(image_name, temp_name)
-                if not link_to_image(sub_dir, temp_name, temp_link, phpsessid):
+            print(f"正在下载 PID {pid} ({index}/{len(pid_list)})，共 {pid_links['pageCount']} 张")
+            # 直接用 links 字典里的链接下载，无需 filename_replace_index
+            for page_num in range(1, pid_links['pageCount'] + 1):
+                page_url = pid_links['links'][page_num]['original']
+                page_name = page_url.split('/')[-1]
+                print(page_name)
+                if not link_to_image(sub_dir, page_name, page_url, phpsessid):
                     break
             # max_download_times -= 1
             # print(max_download_times)

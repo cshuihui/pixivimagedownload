@@ -48,7 +48,7 @@ def link_find(phpsessid, pid, quality):
     }
 
     image_url = 'https://www.pixiv.net/ajax/illust/'
-    response = requests.get(url=image_url + str(pid), headers=headers, cookies=cookies)
+    response = requests.get(url=image_url + str(pid), headers=headers, cookies=cookies, timeout=(10, 30))
     # json_data = response.json()  # json()来自requests可以自动将json解析成字典
 
     if response.status_code == 200:
@@ -61,7 +61,7 @@ def link_find(phpsessid, pid, quality):
         time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
         pages_resp = requests.get(
             url=f'https://www.pixiv.net/ajax/illust/{pid}/pages',
-            headers=headers, cookies=cookies
+            headers=headers, cookies=cookies, timeout=(10, 30)
         )
         if pages_resp.status_code == 200:
             pages_data = pages_resp.json().get('body', [])

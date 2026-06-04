@@ -13,3 +13,4 @@ dist
 build
 Pixiv图片筛选器.spec
 release
+.venv_cpu

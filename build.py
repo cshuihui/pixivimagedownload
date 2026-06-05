@@ -30,7 +30,6 @@ SPEC_FILE = os.path.join(PROJECT_ROOT, f"{APP_NAME}.spec")
 DATA_FILES = [
     ("143035291_p0.jpg", "."),          # 默认显示图片
     ("pixiv.ico", "."),                 # 程序图标
-    ("model", "model"),                 # 模型文件夹（.pth 文件）
 ]
 
 # 需要额外引入的隐藏模块
@@ -43,10 +42,10 @@ HIDDEN_IMPORTS = [
     "selenium.webdriver.support.ui",
     "selenium.webdriver.support.expected_conditions",
     "webdriver_manager.microsoft",
-    # model 包
-    "model",
-    "model.predict",
-    "model.param",
+    # model_script 包
+    "model_script",
+    "model_script.function",
+    "onnxruntime",
 ]
 
 # 需要排除的模块（减小体积）
@@ -56,13 +55,9 @@ EXCLUDES = [
     "scipy",
     "PIL.ImageShow",  # pillow 部分功能
     "setuptools",
-    # torch GPU 相关（只用 CPU 推理）
-    "torch.cuda",
-    "torch.backends.cudnn",
-    "torch.distributed",
-    "torch.jit",
-    "torch.autograd",
-    "torch.optim",
+    # 已改用 ONNX Runtime，不再需要 torch
+    "torch",
+    "torchvision",
 ]
 
 
@@ -105,6 +100,7 @@ def build(args):
         sys.executable, "-m", "PyInstaller",
         "--noconfirm",                    # 覆盖输出目录
         "--clean",                        # 清理缓存
+        "--strip",                        # 去掉调试符号
         "--name", APP_NAME,               # 输出名称
     ]
 

@@ -6,7 +6,15 @@ MaxTryTimes = 5
 MIN_WAIT_SECONDS = 0.1
 MAX_WAIT_SECONDS = 0.5
 
-def id_save(name, page, phpsessid):
+def id_save(name, page, phpsessid, stop_event=None):
+    """获取作品ID列表
+
+    Args:
+        name: 搜索关键词
+        page: 页码
+        phpsessid: PHPSESSID
+        stop_event: 可选，threading.Event，设置后可在重试时响应停止信号
+    """
     url = f'https://www.pixiv.net/ajax/search/artworks/{name}?word={name}&order=date_d&p='
 
     cookies = {
@@ -36,6 +44,10 @@ def id_save(name, page, phpsessid):
     print(f'正在获取第 {page} 页的pid')
     time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
     for times in range(1, MaxTryTimes + 1):
+        # 检查停止信号
+        if stop_event is not None and stop_event.is_set():
+            print("已收到停止信号，中断获取 PID")
+            break
         try:
             response = requests.get(url=url + str(page), headers=headers, cookies=cookies, timeout=(10, 60))
             #   连接10秒 读取5秒

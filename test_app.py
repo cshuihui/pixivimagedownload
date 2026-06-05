@@ -8,15 +8,16 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QSpinBox, QCheckBox, QPushButton, QGroupBox, QScrollArea,
     QMessageBox, QComboBox, QGridLayout, QTextEdit, QStackedWidget, QFileDialog
 )
-from PySide6.QtGui import QPixmap, QFont, QIcon
-from PySide6.QtCore import Qt, QThread, QObject, Signal, Slot, QTimer
+from PySide6.QtGui import QPixmap, QFont, QIcon, QWheelEvent, QMouseEvent
+from PySide6.QtCore import Qt, QThread, QObject, Signal, Slot, QTimer, QEvent, QPoint
+
 import shutil
 import pixiv_id
 from pixiv_image_download import link_to_image, filename_extract_index
 from pixiv_imagelink import link_find
 import get_phpsessid as gps
 import requests
-from model.predict import predict as model_predict
+from model_script.function import predict_onnx as model_predict
 
 # ==================== 初始化变量 ====================
 MIN_WAIT_SECONDS = 0.1
@@ -42,7 +43,11 @@ pids_filter_dir = data_path('pids_filter.txt')
 phpsessid_file = data_path('phpsessid.txt')
 temp_dir = 'temp'
 save_dir = 'saved'
-model_path = os.path.join(os.path.abspath("."), 'model', 'nahida_cnn_best.pth')
+model_path = os.path.join(os.path.abspath("."), 'models', 'nahida_cnn_best.onnx')
+
+# 确保 models 目录存在
+model_dir = os.path.join(os.path.abspath("."), 'models')
+os.makedirs(model_dir, exist_ok=True)
 
 # 读取 pids_filter.txt（优先当前目录，不存在则从打包目录复制默认文件）
 if not os.path.exists(pids_filter_dir):
@@ -142,12 +147,14 @@ class SearchWorker(QObject):
     error = Signal(str)
 
     def __init__(self, content, php, r18_rem, r18g_rem, pages, download_limit=0, limit_mode="图片张数",
-                 model_identify=False, model_path="", page_limit_enabled=False, page_limit=5):
+                 model_identify=False, model_path="", page_limit_enabled=False, page_limit=5,
+                 r18_only=False):
         super().__init__()
         self.content = content
         self.php = php
         self.r18_rem = r18_rem
         self.r18g_rem = r18g_rem
+        self.r18_only = r18_only
         self.pages = pages
         self.download_limit = download_limit
         self.limit_mode = limit_mode  # "图片张数" 或 "PID个数"
@@ -191,7 +198,7 @@ class SearchWorker(QObject):
             for page in range(1, self.pages + 1):
                 if self.stop_event.is_set() or self._check_limit_reached(download_count):
                     break
-                pid_list = pixiv_id.id_save(self.content, page, self.php)
+                pid_list = pixiv_id.id_save(self.content, page, self.php, stop_event=self.stop_event)
                 self.log(f"正在下载第 {page} 页的图片")
                 time.sleep(random.randint(1, 3))
                 for _index, pid in enumerate(pid_list, start=1):
@@ -204,7 +211,11 @@ class SearchWorker(QObject):
                         self.log(f"{pid} 已过滤(用户选择)")
                         continue
                     pid_links = link_find(self.php, pid, quality=2)
-                    if pid_links['R18'] != self.r18_rem or pid_links['R18G'] != self.r18g_rem:
+                    if self.r18_only:
+                        if pid_links['R18'] != 1:
+                            self.log(f"{pid} 已过滤(非R18)")
+                            continue
+                    elif pid_links['R18'] != self.r18_rem or pid_links['R18G'] != self.r18g_rem:
                         self.log(f"{pid} 已过滤(r18/r18g类型)")
                         continue
                     # PID内页数超过限制则跳过
@@ -262,6 +273,7 @@ class SearchWorker(QObject):
 class SaveWorker(QObject):
     finished = Signal()
     error = Signal(str)
+    exists = Signal(str)  # 文件已存在
 
     def __init__(self, save_subdir, php, image_index, pid):
         super().__init__()
@@ -278,6 +290,11 @@ class SaveWorker(QObject):
             idx = int(self.image_index) if self.image_index is not None else 0
             page_url = pid_links['links'][idx + 1]['original']
             page_name = page_url.split('/')[-1]
+            save_path = os.path.join(self.save_subdir, page_name)
+            # 检查文件是否已存在
+            if os.path.exists(save_path):
+                self.exists.emit(page_name)
+                return
             link_to_image(self.save_subdir, page_name, page_url, self.php)
             self.finished.emit()
         except Exception as e:
@@ -389,7 +406,65 @@ class PixivFilterApp(QMainWindow):
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
+        # 缩放状态（初始化必须在 image_label 创建之后）
+        self._zoom1 = 0
+        self._zoom2 = 0
+        self._pixmap1 = None
+        self._pixmap2 = None
+        self.image_label.installEventFilter(self)
+        self.image_label2.installEventFilter(self)
+        # 滚动区域的视口也要安装事件过滤，因为滚轮事件可能被视口拦截
+        self.scroll_area.viewport().installEventFilter(self)
+        self.scroll_area2.viewport().installEventFilter(self)
+
         self.update_image_display()
+
+        # 拖拽状态
+        self._drag_pos = None
+
+    def eventFilter(self, obj, event):
+        # 滚轮缩放
+        if event.type() == QEvent.Type.Wheel:
+            if obj is self.image_label or obj is self.scroll_area.viewport():
+                self._on_wheel(event, 1)
+                return True
+            elif obj is self.image_label2 or obj is self.scroll_area2.viewport():
+                self._on_wheel(event, 2)
+                return True
+
+        # 鼠标拖拽移动图片
+        if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+            label = self.image_label if obj in (self.image_label, self.scroll_area.viewport()) else \
+                    self.image_label2 if obj in (self.image_label2, self.scroll_area2.viewport()) else None
+            if label:
+                scroll = self.scroll_area if label is self.image_label else self.scroll_area2
+                scroll.setCursor(Qt.CursorShape.ClosedHandCursor)
+                self._drag_pos = event.globalPosition().toPoint()
+                return True
+
+        if event.type() == QEvent.Type.MouseMove and self._drag_pos is not None:
+            label = self.image_label if obj in (self.image_label, self.scroll_area.viewport()) else \
+                    self.image_label2 if obj in (self.image_label2, self.scroll_area2.viewport()) else None
+            if label:
+                scroll = self.scroll_area if label is self.image_label else self.scroll_area2
+                delta = event.globalPosition().toPoint() - self._drag_pos
+                self._drag_pos = event.globalPosition().toPoint()
+                h_bar = scroll.horizontalScrollBar()
+                v_bar = scroll.verticalScrollBar()
+                h_bar.setValue(h_bar.value() - delta.x())
+                v_bar.setValue(v_bar.value() - delta.y())
+                return True
+
+        if event.type() == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton:
+            if self._drag_pos is not None:
+                self._drag_pos = None
+                if obj in (self.image_label, self.scroll_area.viewport()):
+                    self.scroll_area.setCursor(Qt.CursorShape.ArrowCursor)
+                elif obj in (self.image_label2, self.scroll_area2.viewport()):
+                    self.scroll_area2.setCursor(Qt.CursorShape.ArrowCursor)
+                return True
+
+        return super().eventFilter(obj, event)
 
     def create_filter_tab(self):
         widget = QWidget()
@@ -410,30 +485,55 @@ class PixivFilterApp(QMainWindow):
         search_layout.addWidget(self.pages_spinbox, 0, 3)
 
         search_layout.addWidget(QLabel("内容过滤:"), 1, 0)
+        filter_row = QHBoxLayout()
+        filter_row.setAlignment(Qt.AlignLeft)
         self.r18_checkbox = QCheckBox("R18过滤")
         self.r18_checkbox.setChecked(True)
-        search_layout.addWidget(self.r18_checkbox, 2, 1)
+        filter_row.addWidget(self.r18_checkbox)
 
         self.r18g_checkbox = QCheckBox("R18G过滤")
         self.r18g_checkbox.setChecked(True)
-        search_layout.addWidget(self.r18g_checkbox, 2, 2)
+        filter_row.addWidget(self.r18g_checkbox)
+
+        self.r18_only_checkbox = QCheckBox("仅R18内容")
+        filter_row.addWidget(self.r18_only_checkbox)
+        search_layout.addLayout(filter_row, 1, 1, 1, 3)
 
         search_group.setLayout(search_layout)
         main_layout.addWidget(search_group)
 
+        # R18 互斥逻辑（冲突时禁用）
+        def _update_r18_state():
+            r18_any = self.r18_checkbox.isChecked() or self.r18g_checkbox.isChecked()
+            r18_only = self.r18_only_checkbox.isChecked()
+            self.r18_checkbox.setEnabled(not r18_only)
+            self.r18g_checkbox.setEnabled(not r18_only)
+            self.r18_only_checkbox.setEnabled(not r18_any)
+        self.r18_checkbox.stateChanged.connect(_update_r18_state)
+        self.r18g_checkbox.stateChanged.connect(_update_r18_state)
+        self.r18_only_checkbox.stateChanged.connect(_update_r18_state)
+        _update_r18_state()
+
         content_layout = QHBoxLayout()
 
         left_layout = QVBoxLayout()
-        # 图片显示容器（带文件名叠加层）
+        # 图片显示容器（滚动拖动 + 文件名叠加层）
         self.image_container = QWidget()
         self.image_container.setMinimumSize(600, 500)
         container_layout = QGridLayout(self.image_container)
         container_layout.setContentsMargins(0, 0, 0, 0)
 
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(False)
+        self.scroll_area.setAlignment(Qt.AlignCenter)
+        self.scroll_area.setStyleSheet("border: 1px solid gray;")
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("border: 1px solid gray; background-color: #f0f0f0;")
-        container_layout.addWidget(self.image_label, 0, 0)
+        self.scroll_area.setWidget(self.image_label)
+        container_layout.addWidget(self.scroll_area, 0, 0)
 
         self.filename_label = QLabel()
         self.filename_label.setStyleSheet("""
@@ -524,16 +624,23 @@ class PixivFilterApp(QMainWindow):
         content_layout = QHBoxLayout()
 
         left_layout = QVBoxLayout()
-        # 图片显示容器（带文件名叠加层）
+        # 图片显示容器（滚动拖动 + 文件名叠加层）
         self.image_container2 = QWidget()
         self.image_container2.setMinimumSize(600, 500)
         container_layout2 = QGridLayout(self.image_container2)
         container_layout2.setContentsMargins(0, 0, 0, 0)
 
+        self.scroll_area2 = QScrollArea()
+        self.scroll_area2.setWidgetResizable(False)
+        self.scroll_area2.setAlignment(Qt.AlignCenter)
+        self.scroll_area2.setStyleSheet("border: 1px solid gray;")
+        self.scroll_area2.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area2.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
         self.image_label2 = QLabel()
         self.image_label2.setAlignment(Qt.AlignCenter)
-        self.image_label2.setStyleSheet("border: 1px solid gray; background-color: #f0f0f0;")
-        container_layout2.addWidget(self.image_label2, 0, 0)
+        self.scroll_area2.setWidget(self.image_label2)
+        container_layout2.addWidget(self.scroll_area2, 0, 0)
 
         self.filename_label2 = QLabel()
         self.filename_label2.setStyleSheet("""
@@ -560,9 +667,10 @@ class PixivFilterApp(QMainWindow):
         search_content_group.setLayout(search_content_layout)
         right_layout.addWidget(search_content_group)
 
-        filter_group = QGroupBox("过滤选项")
+        filter_group = QGroupBox("选项")
         filter_layout = QVBoxLayout()
 
+        filter_layout.addWidget(QLabel("过滤选项:"))
         self.pid_filter_checkbox2 = QCheckBox("pid屏蔽")
         filter_layout.addWidget(self.pid_filter_checkbox2)
 
@@ -573,6 +681,21 @@ class PixivFilterApp(QMainWindow):
         self.r18g_checkbox2 = QCheckBox("R18G过滤")
         self.r18g_checkbox2.setChecked(True)
         filter_layout.addWidget(self.r18g_checkbox2)
+
+        self.r18_only_checkbox2 = QCheckBox("仅R18内容")
+        filter_layout.addWidget(self.r18_only_checkbox2)
+
+        # R18 互斥逻辑（冲突时禁用）
+        def _update_r18_state2():
+            r18_any = self.r18_checkbox2.isChecked() or self.r18g_checkbox2.isChecked()
+            r18_only = self.r18_only_checkbox2.isChecked()
+            self.r18_checkbox2.setEnabled(not r18_only)
+            self.r18g_checkbox2.setEnabled(not r18_only)
+            self.r18_only_checkbox2.setEnabled(not r18_any)
+        self.r18_checkbox2.stateChanged.connect(_update_r18_state2)
+        self.r18g_checkbox2.stateChanged.connect(_update_r18_state2)
+        self.r18_only_checkbox2.stateChanged.connect(_update_r18_state2)
+        _update_r18_state2()
 
         filter_layout.addWidget(QLabel("搜索页数:"))
         self.pages_spinbox2 = QSpinBox()
@@ -687,7 +810,7 @@ class PixivFilterApp(QMainWindow):
         model_layout = QVBoxLayout()
 
         model_row = QHBoxLayout()
-        model_row.addWidget(QLabel("模型选择:"))
+        model_row.addWidget(QLabel("模型选择(ONNX):"))
         self.model_combo = QComboBox()
         model_row.addWidget(self.model_combo, 1)
 
@@ -726,8 +849,8 @@ class PixivFilterApp(QMainWindow):
         page_limit_group.setLayout(page_limit_layout)
         layout.addWidget(page_limit_group)
 
-        # 初始扫描默认 model/ 目录
-        self._scan_model_dir(os.path.join(os.path.abspath("."), 'model'))
+        # 初始扫描默认 models/ 目录
+        self._scan_model_dir(os.path.join(os.path.abspath("."), 'models'))
         self.model_combo.currentIndexChanged.connect(self._on_model_selected)
 
         layout.addStretch()
@@ -796,28 +919,33 @@ class PixivFilterApp(QMainWindow):
             self.get_php_btn.setEnabled(True)
 
     def _on_browse_model_dir(self):
-        """浏览并选择模型目录，扫描其中的 .pth 文件"""
+        """浏览并选择模型目录，扫描其中的模型文件"""
+        default_dir = os.path.join(os.path.abspath("."), 'models')
         dir_path = QFileDialog.getExistingDirectory(
-            self, "选择模型目录", os.path.dirname(self.model_combo.currentText())
+            self, "选择模型目录", default_dir
         )
         if dir_path:
             self._scan_model_dir(dir_path)
 
     def _scan_model_dir(self, directory):
-        """扫描指定目录下的所有 .pth 文件，填充下拉列表"""
+        """扫描指定目录下的所有 .onnx 文件，填充下拉列表"""
         self.model_combo.blockSignals(True)
         self.model_combo.clear()
         if os.path.isdir(directory):
-            pth_files = [f for f in os.listdir(directory) if f.endswith('.pth')]
-            if pth_files:
-                for f in sorted(pth_files):
+            model_files = [f for f in os.listdir(directory) if f.endswith('.onnx')]
+            if model_files:
+                for f in sorted(model_files):
                     full_path = os.path.join(directory, f)
                     self.model_combo.addItem(full_path, full_path)
                 self.model_combo.setCurrentIndex(0)
                 self._on_model_selected()
             else:
-                self.model_status_label.setText("⚠️ 该目录下没有 .pth 模型文件")
+                self.model_status_label.setText("⚠️ 该目录下没有 .onnx 模型文件")
                 self.model_status_label.setStyleSheet("color: orange; padding: 4px;")
+                self.model_identify_checkbox1.setEnabled(False)
+                self.model_identify_checkbox2.setEnabled(False)
+                self.model_identify_checkbox1.setChecked(False)
+                self.model_identify_checkbox2.setChecked(False)
         else:
             self.model_status_label.setText("⚠️ 目录不存在")
             self.model_status_label.setStyleSheet("color: orange; padding: 4px;")
@@ -831,9 +959,15 @@ class PixivFilterApp(QMainWindow):
             model_path = path
             self.model_status_label.setText(f"✅ 模型已加载: {os.path.basename(path)}")
             self.model_status_label.setStyleSheet("color: green; padding: 4px;")
+            self.model_identify_checkbox1.setEnabled(True)
+            self.model_identify_checkbox2.setEnabled(True)
         else:
-            self.model_status_label.setText("⚠️ 模型文件不存在")
+            self.model_status_label.setText("⚠️ ONNX 模型文件不存在")
             self.model_status_label.setStyleSheet("color: orange; padding: 4px;")
+            self.model_identify_checkbox1.setEnabled(False)
+            self.model_identify_checkbox2.setEnabled(False)
+            self.model_identify_checkbox1.setChecked(False)
+            self.model_identify_checkbox2.setChecked(False)
 
     def _on_page_limit_toggled(self, checked):
         """PID页数限制复选框切换时联动 spinbox"""
@@ -865,12 +999,10 @@ class PixivFilterApp(QMainWindow):
         if label is None:
             label = self.image_label
 
-        # 根据label确定使用哪个tab的image_list
         il = self.image_list_tab1 if label is self.image_label else self.image_list_tab2
 
         if index is None:
             image_path = default_image
-            # 显示默认图时清除文件名
             if label is self.image_label:
                 self.filename_label.clear()
             else:
@@ -883,20 +1015,74 @@ class PixivFilterApp(QMainWindow):
 
         if os.path.exists(image_path):
             pixmap = QPixmap(image_path)
-            scaled_pixmap = pixmap.scaledToWidth(label.width() - 10, Qt.TransformationMode.SmoothTransformation)
-            label.setPixmap(scaled_pixmap)
-            # 更新对应的文件名标签
-            fname = os.path.basename(image_path)
+            # 保存原图引用
             if label is self.image_label:
-                self.filename_label.setText(fname)
+                self._pixmap1 = pixmap
             else:
-                self.filename_label2.setText(fname)
+                self._pixmap2 = pixmap
+            # 缩放显示
+            zoom = self._zoom1 if label is self.image_label else self._zoom2
+            self._apply_zoom(label, zoom)
+            fname = os.path.basename(image_path)
+            pid = filename_split(fname)
+            idx = filename_extract_index(fname)
+            display_name = f"{pid}_p{idx}" if idx else pid
+            if label is self.image_label:
+                self.filename_label.setText(display_name)
+            else:
+                self.filename_label2.setText(display_name)
         else:
             label.setText(f"图片不存在: {image_path}")
             if label is self.image_label:
                 self.filename_label.clear()
             else:
                 self.filename_label2.clear()
+
+    def _apply_zoom(self, label, zoom):
+        """按缩放因子显示图片，保持宽高比不拉伸"""
+        pixmap = self._pixmap1 if label is self.image_label else self._pixmap2
+        if pixmap is None or pixmap.isNull():
+            return
+        # 获取滚动区域视口尺寸（图片实际可显示区域）
+        scroll = self.scroll_area if label is self.image_label else self.scroll_area2
+        cw = max(scroll.viewport().width() - 5, 10)
+        ch = max(scroll.viewport().height() - 5, 10)
+        if zoom == 0:
+            scaled = pixmap.scaled(cw, ch, Qt.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        else:
+            fit_w = cw
+            fit_h = int(pixmap.height() * cw / pixmap.width())
+            w = max(int(fit_w * zoom), 10)
+            h = max(int(fit_h * zoom), 10)
+            scaled = pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        label.setPixmap(scaled)
+        # 更新标签自身尺寸为缩放后的图片尺寸（滚动区域据此决定是否显示滚动条）
+        label.resize(scaled.size())
+
+    def _on_wheel(self, event, tab):
+        """滚轮缩放"""
+        zoom = self._zoom1 if tab == 1 else self._zoom2
+        if zoom == 0:
+            zoom = 1.0
+        if event.angleDelta().y() > 0:
+            zoom *= 1.2
+        else:
+            zoom *= 1 / 1.2
+        zoom = max(0.1, min(zoom, 10.0))
+        if tab == 1:
+            self._zoom1 = zoom
+        else:
+            self._zoom2 = zoom
+        label = self.image_label if tab == 1 else self.image_label2
+        self._apply_zoom(label, zoom)
+
+    def resizeEvent(self, event):
+        """窗口缩放时重绘图片"""
+        super().resizeEvent(event)
+        if hasattr(self, 'image_label') and self._pixmap1:
+            self._apply_zoom(self.image_label, self._zoom1)
+        if hasattr(self, 'image_label2') and self._pixmap2:
+            self._apply_zoom(self.image_label2, self._zoom2)
 
     def _set_buttons_enabled(self, enabled, tab=1):
         """统一控制按钮启用/禁用（不影响搜索按钮文字）"""
@@ -959,6 +1145,7 @@ class PixivFilterApp(QMainWindow):
 
         r18_rem = 0 if self.r18_checkbox.isChecked() else 1
         r18g_rem = 0 if self.r18g_checkbox.isChecked() else 1
+        r18_only = self.r18_only_checkbox.isChecked()
 
         # 搜索按钮保持可用（可点击暂停），其他按钮等第一张图到了再启用
         self.search_btn.setEnabled(True)
@@ -978,7 +1165,8 @@ class PixivFilterApp(QMainWindow):
             model_identify=self.model_identify_checkbox1.isChecked(),
             model_path=model_path,
             page_limit_enabled=self.page_limit_checkbox.isChecked(),
-            page_limit=self.page_limit_spin.value()
+            page_limit=self.page_limit_spin.value(),
+            r18_only=r18_only
         )
         self.search_thread = QThread()
         self.search_worker.moveToThread(self.search_thread)
@@ -1078,6 +1266,7 @@ class PixivFilterApp(QMainWindow):
 
         r18_rem = 0 if self.r18_checkbox2.isChecked() else 1
         r18g_rem = 0 if self.r18g_checkbox2.isChecked() else 1
+        r18_only = self.r18_only_checkbox2.isChecked()
 
         self.search_btn2.setEnabled(True)
         self.search_btn2.setText("搜索中...")
@@ -1096,7 +1285,8 @@ class PixivFilterApp(QMainWindow):
             model_identify=self.model_identify_checkbox2.isChecked(),
             model_path=model_path,
             page_limit_enabled=self.page_limit_checkbox.isChecked(),
-            page_limit=self.page_limit_spin.value()
+            page_limit=self.page_limit_spin.value(),
+            r18_only=r18_only
         )
         self.search_thread2 = QThread()
         self.search_worker2.moveToThread(self.search_thread2)
@@ -1169,7 +1359,7 @@ class PixivFilterApp(QMainWindow):
         self._save_pid = filename_split(image_filename)
         php = self.php_input_global.text()
 
-        self._set_buttons_enabled(False, tab=1)
+        self.save_btn.setEnabled(False)
         self.save_btn.setText("保存中...")
 
         # 使用QThread + moveToThread方式处理保存操作
@@ -1179,9 +1369,11 @@ class PixivFilterApp(QMainWindow):
         
         self.save_worker.finished.connect(self._on_save_done)
         self.save_worker.error.connect(self._on_save_error)
+        self.save_worker.exists.connect(self._on_save_exists)
         self.save_thread.started.connect(self.save_worker.run)
         self.save_worker.finished.connect(self.save_thread.quit)
         self.save_worker.error.connect(self.save_thread.quit)
+        self.save_worker.exists.connect(self.save_thread.quit)
         
         self.save_thread.start()
 
@@ -1189,15 +1381,20 @@ class PixivFilterApp(QMainWindow):
         if self.pid_filter_checkbox.isChecked():
             pid_filter_add(self._save_pid, True)
 
-        self._set_buttons_enabled(True, tab=1)
+        self.save_btn.setEnabled(True)
         self.save_btn.setText("✅ 已保存")
         # 2秒后恢复按钮文字
         QTimer.singleShot(2000, lambda: self.save_btn.setText("✅ 保存") if self.save_btn.text() == "✅ 已保存" else None)
 
     def _on_save_error(self, msg):
-        self._set_buttons_enabled(True, tab=1)
+        self.save_btn.setEnabled(True)
         self.save_btn.setText("❌ 失败")
         QTimer.singleShot(2000, lambda: self.save_btn.setText("✅ 保存") if self.save_btn.text() == "❌ 失败" else None)
+
+    def _on_save_exists(self, name):
+        self.save_btn.setEnabled(True)
+        self.save_btn.setText("✅ 保存")
+        QMessageBox.information(self, "提示", f"文件已存在: {name}")
 
     # ==================== Tab2 保存 ====================
     def on_save_clicked2(self):
@@ -1211,7 +1408,7 @@ class PixivFilterApp(QMainWindow):
         self._save_pid2 = filename_split(image_filename)
         php = self.php_input_global.text()
 
-        self._set_buttons_enabled(False, tab=2)
+        self.save_btn2.setEnabled(False)
         self.save_btn2.setText("保存中...")
 
         # 使用QThread + moveToThread方式处理保存操作
@@ -1221,9 +1418,11 @@ class PixivFilterApp(QMainWindow):
         
         self.save_worker2.finished.connect(self._on_save_done2)
         self.save_worker2.error.connect(self._on_save_error2)
+        self.save_worker2.exists.connect(self._on_save_exists2)
         self.save_thread2.started.connect(self.save_worker2.run)
         self.save_worker2.finished.connect(self.save_thread2.quit)
         self.save_worker2.error.connect(self.save_thread2.quit)
+        self.save_worker2.exists.connect(self.save_thread2.quit)
         
         self.save_thread2.start()
 
@@ -1231,14 +1430,19 @@ class PixivFilterApp(QMainWindow):
         if self.pid_filter_checkbox2.isChecked():
             pid_filter_add(self._save_pid2, True)
 
-        self._set_buttons_enabled(True, tab=2)
+        self.save_btn2.setEnabled(True)
         self.save_btn2.setText("✅ 已保存")
         QTimer.singleShot(2000, lambda: self.save_btn2.setText("✅ 保存") if self.save_btn2.text() == "✅ 已保存" else None)
 
     def _on_save_error2(self, msg):
-        self._set_buttons_enabled(True, tab=2)
+        self.save_btn2.setEnabled(True)
         self.save_btn2.setText("❌ 失败")
         QTimer.singleShot(2000, lambda: self.save_btn2.setText("✅ 保存") if self.save_btn2.text() == "❌ 失败" else None)
+
+    def _on_save_exists2(self, name):
+        self.save_btn2.setEnabled(True)
+        self.save_btn2.setText("✅ 保存")
+        QMessageBox.information(self, "提示", f"文件已存在: {name}")
 
     # ==================== 导航：上一张 / 下一张 ====================
     def _reset_save_btn(self):

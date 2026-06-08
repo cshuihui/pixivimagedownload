@@ -210,7 +210,7 @@ class SearchWorker(QObject):
                     if pid in pids_filter_list:
                         self.log(f"{pid} 已过滤(用户选择)")
                         continue
-                    pid_links = link_find(self.php, pid, quality=2)
+                    pid_links = link_find(self.php, pid)
                     if self.r18_only:
                         if pid_links['R18'] != 1:
                             self.log(f"{pid} 已过滤(非R18)")
@@ -231,7 +231,7 @@ class SearchWorker(QObject):
                         self.check_pause()  # 每张图下载前也检查
                         if self.stop_event.is_set():
                             break
-                        page_url = pid_links['links'][pn]['original']
+                        page_url = pid_links['links'][pn]['regular']
                         page_name = page_url.split('/')[-1]
                         self.log(page_name)
                         if not link_to_image(sub_dir, page_name, page_url, self.php):
@@ -256,7 +256,8 @@ class SearchWorker(QObject):
                             continue
 
                         result.append(full_path)
-                        download_count += 1
+                        if self.limit_mode == "图片张数":
+                            download_count += 1
                         self.image_ready.emit(full_path)  # 立即通知UI
                     # PID个数模式：每处理完一个PID计数+1
                     if self.limit_mode == "PID个数":
@@ -286,7 +287,7 @@ class SaveWorker(QObject):
     def run(self):
         try:
             os.makedirs(self.save_subdir, exist_ok=True)
-            pid_links = link_find(self.php, self.pid, quality=4)
+            pid_links = link_find(self.php, self.pid)
             idx = int(self.image_index) if self.image_index is not None else 0
             page_url = pid_links['links'][idx + 1]['original']
             page_name = page_url.split('/')[-1]

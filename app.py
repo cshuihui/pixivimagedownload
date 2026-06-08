@@ -53,7 +53,7 @@ def save_image(index, check_box_group, search_con, php):
         image_filename = os.path.basename(img_path)
         idx_str = filename_extract_index(image_filename)
         pid = filename_split(image_filename)
-        pid_links = link_find(php, pid, quality=4)
+        pid_links = link_find(php, pid)
 
         # 提取页码，找不到则默认下载第1页
         image_index = int(idx_str) if idx_str is not None else 0

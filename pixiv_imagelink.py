@@ -6,17 +6,15 @@ MAX_WAIT_SECONDS = 0.3
 image_quality = ['mini', 'thumb', 'small', 'regular', 'original']
 
 
-def mark_r18_r18g(data):
-    result = {'R18': 0, 'R18G': 0}
-    for d in data:
-        if d['tag'] == 'R-18':
-            result['R18'] = 1
-        elif d['tag'] == 'R-18G':
-            result['R18G'] = 1
-    return result
+def mark_r18_r18g(x_restrict):
+    """通过 xRestrict 判断 R-18 / R-18G
+       0=全年龄, 1=R-18, 2=R-18G
+    """
+    return {'R18': 1 if x_restrict == 1 else 0,
+            'R18G': 1 if x_restrict == 2 else 0}
 
 
-def link_find(phpsessid, pid, quality):
+def link_find(phpsessid, pid):
     links = dict()
     print('开始获取pid直链')
 
@@ -53,7 +51,7 @@ def link_find(phpsessid, pid, quality):
 
     if response.status_code == 200:
         body = response.json()['body']
-        links.update(mark_r18_r18g(body['tags']['tags']))
+        links.update(mark_r18_r18g(body.get('xRestrict', 0)))
         page_count = body.get('pageCount', 1)
         links.update({'pageCount': page_count})
 
@@ -82,5 +80,5 @@ if __name__ == '__main__':
     import json
     with open("phpsessid.txt", 'r') as f:
         phpsessid = f.read()
-    result = link_find(phpsessid, '144811703', quality=2)
+    result = link_find(phpsessid, '144811703')
     print(json.dumps(result, indent=2, ensure_ascii=False))

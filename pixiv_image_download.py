@@ -200,7 +200,7 @@ def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1
             if pid in pids_filter:
                 print(pid, '已过滤(用户选择)')
                 continue
-            pid_links = pixiv_imagelink.link_find(phpsessid, pid, quality)
+            pid_links = pixiv_imagelink.link_find(phpsessid, pid)
             if pid_links['R18'] != r18_rem or pid_links['R18G'] != r18g_rem:
                 print(pid, '已过滤(r18/r18g类型)')
                 continue

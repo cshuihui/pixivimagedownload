@@ -2,6 +2,7 @@ import sys
 import os
 import time
 import random
+import json
 import threading
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
@@ -48,6 +49,10 @@ model_path = os.path.join(os.path.abspath("."), 'models', 'nahida_cnn_best.onnx'
 # 确保 models 目录存在
 model_dir = os.path.join(os.path.abspath("."), 'models')
 os.makedirs(model_dir, exist_ok=True)
+
+# 配置文件路径
+config_dir = os.path.join(os.path.abspath("."), 'config')
+config_file = os.path.join(config_dir, 'config.json')
 
 # 读取 pids_filter.txt（优先当前目录，不存在则从打包目录复制默认文件）
 if not os.path.exists(pids_filter_dir):
@@ -345,6 +350,13 @@ class PixivFilterApp(QMainWindow):
         self.image_list_tab1 = []
         self.image_list_tab2 = []
 
+        # 每个Tab独立的默认图片
+        self.default_image_tab1 = default_image
+        self.default_image_tab2 = default_image
+
+        # 从配置文件加载上次保存的设置
+        self._load_config()
+
         # 自定义侧边栏（水平文字）+ 堆栈面板
         central_widget = QWidget()
         main_layout = QHBoxLayout()
@@ -418,10 +430,42 @@ class PixivFilterApp(QMainWindow):
         self.scroll_area.viewport().installEventFilter(self)
         self.scroll_area2.viewport().installEventFilter(self)
 
-        self.update_image_display()
+        # 延迟到窗口显示后再加载默认图片，确保视口尺寸正确（自适应）
+        QTimer.singleShot(0, self.update_image_display)
 
         # 拖拽状态
         self._drag_pos = None
+
+    # ==================== 配置读写 ====================
+    def _load_config(self):
+        """从 config/config.json 加载上次保存的设置，不存在则创建默认配置"""
+        if not os.path.exists(config_file):
+            self._save_config()
+            return
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            tab1 = data.get('default_image_tab1', '')
+            tab2 = data.get('default_image_tab2', '')
+            if tab1 and os.path.exists(tab1):
+                self.default_image_tab1 = tab1
+            if tab2 and os.path.exists(tab2):
+                self.default_image_tab2 = tab2
+        except Exception as e:
+            print(f"读取配置文件失败: {e}")
+
+    def _save_config(self):
+        """保存当前设置到 config/config.json"""
+        os.makedirs(config_dir, exist_ok=True)
+        try:
+            data = {
+                'default_image_tab1': self.default_image_tab1,
+                'default_image_tab2': self.default_image_tab2,
+            }
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"保存配置文件失败: {e}")
 
     def eventFilter(self, obj, event):
         # 滚轮缩放
@@ -850,9 +894,46 @@ class PixivFilterApp(QMainWindow):
         page_limit_group.setLayout(page_limit_layout)
         layout.addWidget(page_limit_group)
 
+        # 默认图片设置
+        default_img_group = QGroupBox("默认图片设置")
+        default_img_layout = QVBoxLayout()
+
+        # 选择 Tab
+        tab_row = QHBoxLayout()
+        tab_row.addWidget(QLabel("选择 Tab:"))
+        self.default_tab_combo = QComboBox()
+        self.default_tab_combo.addItems(["筛选器", "纳西妲"])
+        self.default_tab_combo.currentIndexChanged.connect(self._on_default_tab_changed)
+        tab_row.addWidget(self.default_tab_combo, 1)
+        default_img_layout.addLayout(tab_row)
+
+        # 选择默认图片
+        img_row = QHBoxLayout()
+        img_row.addWidget(QLabel("默认图片:"))
+        self.default_img_combo = QComboBox()
+        self.default_img_combo.setMinimumWidth(200)
+        img_row.addWidget(self.default_img_combo, 1)
+        self.browse_default_img_btn = QPushButton("浏览...")
+        self.browse_default_img_btn.clicked.connect(self._on_browse_default_image)
+        img_row.addWidget(self.browse_default_img_btn)
+        default_img_layout.addLayout(img_row)
+
+        self.default_img_status = QLabel("")
+        self.default_img_status.setStyleSheet("padding: 4px; color: gray;")
+        default_img_layout.addWidget(self.default_img_status)
+
+        default_img_group.setLayout(default_img_layout)
+        layout.addWidget(default_img_group)
+
         # 初始扫描默认 models/ 目录
         self._scan_model_dir(os.path.join(os.path.abspath("."), 'models'))
         self.model_combo.currentIndexChanged.connect(self._on_model_selected)
+
+        # 初始扫描默认图片
+        self._scan_default_images()
+        self.default_img_combo.currentIndexChanged.connect(self._on_default_image_selected)
+        # 显示初始状态
+        self._on_default_tab_changed(self.default_tab_combo.currentIndex())
 
         layout.addStretch()
         widget.setLayout(layout)
@@ -974,6 +1055,142 @@ class PixivFilterApp(QMainWindow):
         """PID页数限制复选框切换时联动 spinbox"""
         self.page_limit_spin.setEnabled(checked)
 
+    # ==================== 默认图片设置 ====================
+    def _scan_default_images(self):
+        """扫描 theme/default_image 目录下的图片文件，填充下拉列表"""
+        self.default_img_combo.blockSignals(True)
+        self.default_img_combo.clear()
+
+        exts = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
+        # (显示名称, 完整路径, 来源标签)
+        image_entries = []
+        seen_names = set()
+
+        # 1. 扫描打包预设目录（只读，来自 PyInstaller 或开发目录）
+        preset_dir = resource_path(os.path.join('theme', 'default_image'))
+        if os.path.isdir(preset_dir):
+            for f in os.listdir(preset_dir):
+                if f.lower().endswith(exts) and os.path.isfile(os.path.join(preset_dir, f)):
+                    path = os.path.abspath(os.path.join(preset_dir, f))
+                    image_entries.append((f, path, '预设'))
+                    seen_names.add(f.lower())
+
+        # 2. 扫描用户程序目录（可读写，优先级更高，同名文件覆盖预设）
+        user_dir = os.path.join(os.path.abspath("."), 'theme', 'default_image')
+        rel_path = os.path.relpath(user_dir, os.path.abspath("."))
+        if os.path.isdir(user_dir):
+            for f in os.listdir(user_dir):
+                if f.lower().endswith(exts) and os.path.isfile(os.path.join(user_dir, f)):
+                    path = os.path.abspath(os.path.join(user_dir, f))
+                    if f.lower() in seen_names:
+                        # 替换预设的同名文件为用户版本
+                        for i, (name, p, src) in enumerate(image_entries):
+                            if name.lower() == f.lower():
+                                image_entries[i] = (f, path, rel_path)
+                                break
+                    else:
+                        image_entries.append((f, path, rel_path))
+                        seen_names.add(f.lower())
+
+        # 3. 扫描用户添加目录（通过浏览按钮添加的图片）
+        added_dir = os.path.join(os.path.abspath("."), 'theme', 'added_image')
+        added_rel = os.path.relpath(added_dir, os.path.abspath("."))
+        if os.path.isdir(added_dir):
+            for f in os.listdir(added_dir):
+                if f.lower().endswith(exts) and os.path.isfile(os.path.join(added_dir, f)):
+                    path = os.path.abspath(os.path.join(added_dir, f))
+                    if f.lower() in seen_names:
+                        for i, (name, p, src) in enumerate(image_entries):
+                            if name.lower() == f.lower():
+                                image_entries[i] = (f, path, added_rel)
+                                break
+                    else:
+                        image_entries.append((f, path, added_rel))
+                        seen_names.add(f.lower())
+
+        # 按文件名排序
+        image_entries.sort(key=lambda x: x[0].lower())
+
+        if image_entries:
+            for fname, path, source in image_entries:
+                display_text = f"{fname} ({source})"
+                self.default_img_combo.addItem(display_text, path)
+        else:
+            self.default_img_combo.addItem("（未找到图片文件）", "")
+
+        # 根据当前选中的 tab 恢复已保存的选择
+        self._sync_default_img_combo()
+        self.default_img_combo.blockSignals(False)
+
+    def _sync_default_img_combo(self):
+        """同步下拉列表显示当前 tab 已保存的默认图片"""
+        tab_idx = self.default_tab_combo.currentIndex()
+        current_default = self.default_image_tab1 if tab_idx == 0 else self.default_image_tab2
+        if current_default:
+            idx = self.default_img_combo.findData(current_default)
+            if idx >= 0:
+                self.default_img_combo.setCurrentIndex(idx)
+            else:
+                # 如果当前默认图片不在列表中，添加它
+                self.default_img_combo.insertItem(0, os.path.basename(current_default), current_default)
+                self.default_img_combo.setCurrentIndex(0)
+
+    def _on_default_tab_changed(self, index):
+        """切换 Tab 选择时，显示对应的默认图片"""
+        self._sync_default_img_combo()
+        current = self.default_image_tab1 if index == 0 else self.default_image_tab2
+        self.default_img_status.setText(f"当前: {os.path.basename(current)}")
+
+    def _on_default_image_selected(self, index):
+        """从下拉列表选择默认图片时，保存到对应的 tab"""
+        if index < 0:
+            return
+        img_path = self.default_img_combo.currentData()
+        if not img_path or not os.path.exists(img_path):
+            return
+
+        tab_idx = self.default_tab_combo.currentIndex()
+        if tab_idx == 0:
+            self.default_image_tab1 = img_path
+        else:
+            self.default_image_tab2 = img_path
+
+        self._save_config()
+        self.default_img_status.setText(f"✅ 已设置: {os.path.basename(img_path)}")
+        self.default_img_status.setStyleSheet("padding: 4px; color: green;")
+
+    def _on_browse_default_image(self):
+        """浏览并选择一张图片，复制到 theme/added_image 并设为默认图片"""
+        added_dir = os.path.join(os.path.abspath("."), 'theme', 'added_image')
+        os.makedirs(added_dir, exist_ok=True)
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择默认图片", added_dir,
+            "图片文件 (*.jpg *.jpeg *.png *.gif *.webp *.bmp);;所有文件 (*)"
+        )
+        if file_path:
+            # 复制到 theme/added_image/
+            import shutil
+            fname = os.path.basename(file_path)
+            dest_path = os.path.join(added_dir, fname)
+            if os.path.abspath(file_path) != os.path.abspath(dest_path):
+                shutil.copy2(file_path, dest_path)
+
+            # 刷新下拉列表并选中新添加的图片
+            self._scan_default_images()
+            idx = self.default_img_combo.findData(dest_path)
+            if idx >= 0:
+                self.default_img_combo.setCurrentIndex(idx)
+
+            tab_idx = self.default_tab_combo.currentIndex()
+            if tab_idx == 0:
+                self.default_image_tab1 = dest_path
+            else:
+                self.default_image_tab2 = dest_path
+
+            self._save_config()
+            self.default_img_status.setText(f"✅ 已添加: {fname}")
+            self.default_img_status.setStyleSheet("padding: 4px; color: green;")
+
     def _on_tab_changed(self, index):
         """切换标签时更新侧边栏按钮样式"""
         active = """
@@ -990,6 +1207,12 @@ class PixivFilterApp(QMainWindow):
         self.tab_btn2.setStyleSheet(active if index == 1 else inactive)
         self.tab_btn3.setStyleSheet(active if index == 2 else inactive)
 
+        # 切换到没有初始化图片的 tab 时显示默认图片（自适应）
+        if index == 1 and self._pixmap2 is None:
+            QTimer.singleShot(0, lambda: self.update_image_display(label=self.image_label2))
+        elif index == 0 and self._pixmap1 is None:
+            QTimer.singleShot(0, self.update_image_display)
+
     def _set_app_icon(self):
         """设置窗口图标（使用 pixiv.ico）"""
         ico_path = resource_path("pixiv.ico")
@@ -1003,7 +1226,7 @@ class PixivFilterApp(QMainWindow):
         il = self.image_list_tab1 if label is self.image_label else self.image_list_tab2
 
         if index is None:
-            image_path = default_image
+            image_path = self.default_image_tab1 if label is self.image_label else self.default_image_tab2
             if label is self.image_label:
                 self.filename_label.clear()
             else:

@@ -39,7 +39,19 @@ def data_path(relative_path):
     return os.path.join(os.path.abspath("."), relative_path)
 
 
-default_image = resource_path('143035291_p0.jpg')
+def _find_default_image():
+    """从 theme/default_image/ 查找第一张可用图片作为默认"""
+    exts = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
+    for base in [resource_path('theme/default_image'),
+                 os.path.join(os.path.abspath("."), 'theme', 'default_image')]:
+        if os.path.isdir(base):
+            for f in sorted(os.listdir(base)):
+                if f.lower().endswith(exts):
+                    return os.path.join(base, f)
+    return resource_path('143035291_p0.jpg')
+
+
+default_image = _find_default_image()
 pids_filter_dir = data_path('pids_filter.txt')
 phpsessid_file = data_path('phpsessid.txt')
 temp_dir = 'temp'
@@ -162,7 +174,7 @@ class SearchWorker(QObject):
         self.r18_only = r18_only
         self.pages = pages
         self.download_limit = download_limit
-        self.limit_mode = limit_mode  # "图片张数" 或 "PID个数"
+        self.limit_mode = limit_mode  # "页数模式" / "图片张数" / "PID个数"
         self.model_identify = model_identify
         self.model_path = model_path
         self.page_limit_enabled = page_limit_enabled
@@ -215,7 +227,21 @@ class SearchWorker(QObject):
                     if pid in pids_filter_list:
                         self.log(f"{pid} 已过滤(用户选择)")
                         continue
-                    pid_links = link_find(self.php, pid)
+                    # 获取作品信息（带重试）
+                    pid_links = None
+                    for retry in range(1, 6):
+                        if self.stop_event.is_set():
+                            break
+                        try:
+                            pid_links = link_find(self.php, pid)
+                            break
+                        except Exception as e:
+                            wait = 5 * retry
+                            self.log(f"{pid} 连接异常(第{retry}次)，{wait}秒后重试: {e}")
+                            time.sleep(wait)
+                    if pid_links is None:
+                        self.log(f"{pid} 获取失败，跳过")
+                        continue
                     if self.r18_only:
                         if pid_links['R18'] != 1:
                             self.log(f"{pid} 已过滤(非R18)")
@@ -223,11 +249,11 @@ class SearchWorker(QObject):
                     elif pid_links['R18'] != self.r18_rem or pid_links['R18G'] != self.r18g_rem:
                         self.log(f"{pid} 已过滤(r18/r18g类型)")
                         continue
-                    # PID内页数超过限制则跳过
+                    # PID内张数超过限制则跳过
                     if self.page_limit_enabled and pid_links['pageCount'] > self.page_limit:
-                        self.log(f"{pid} 共 {pid_links['pageCount']} 页，超过限制({self.page_limit}页)，跳过")
+                        self.log(f"{pid} 共 {pid_links['pageCount']} 张，超过限制({self.page_limit}张)，跳过")
                         continue
-                    self.log(f"正在下载 PID {pid} ({_index}/{len(pid_list)})，共 {pid_links['pageCount']} 页")
+                    self.log(f"正在下载 PID {pid} ({_index}/{len(pid_list)})，共 {pid_links['pageCount']} 张")
                     for pn in range(1, pid_links['pageCount'] + 1):
                         if self.stop_event.is_set():
                             break
@@ -239,7 +265,21 @@ class SearchWorker(QObject):
                         page_url = pid_links['links'][pn]['regular']
                         page_name = page_url.split('/')[-1]
                         self.log(page_name)
-                        if not link_to_image(sub_dir, page_name, page_url, self.php):
+                        # 下载图片（带重试）
+                        dl_ok = False
+                        for retry in range(1, 6):
+                            if self.stop_event.is_set():
+                                break
+                            try:
+                                if link_to_image(sub_dir, page_name, page_url, self.php):
+                                    dl_ok = True
+                                    break
+                            except Exception as e:
+                                wait = 5 * retry
+                                self.log(f"  下载失败(第{retry}次)，{wait}秒后重试: {e}")
+                                time.sleep(wait)
+                        if not dl_ok:
+                            self.log(f"  {page_name} 下载失败，跳过")
                             break
                         full_path = os.path.abspath(os.path.join(sub_dir, page_name))
 
@@ -447,9 +487,9 @@ class PixivFilterApp(QMainWindow):
                 data = json.load(f)
             tab1 = data.get('default_image_tab1', '')
             tab2 = data.get('default_image_tab2', '')
-            if tab1 and os.path.exists(tab1):
+            if tab1 == '' or (tab1 and os.path.exists(tab1)):
                 self.default_image_tab1 = tab1
-            if tab2 and os.path.exists(tab2):
+            if tab2 == '' or (tab2 and os.path.exists(tab2)):
                 self.default_image_tab2 = tab2
         except Exception as e:
             print(f"读取配置文件失败: {e}")
@@ -521,13 +561,6 @@ class PixivFilterApp(QMainWindow):
         search_layout.addWidget(QLabel("搜索关键词:"), 0, 0)
         self.keywords_input = QLineEdit()
         search_layout.addWidget(self.keywords_input, 0, 1)
-
-        search_layout.addWidget(QLabel("搜索页数:"), 0, 2)
-        self.pages_spinbox = QSpinBox()
-        self.pages_spinbox.setMinimum(1)
-        self.pages_spinbox.setMaximum(20)
-        self.pages_spinbox.setValue(1)
-        search_layout.addWidget(self.pages_spinbox, 0, 3)
 
         search_layout.addWidget(QLabel("内容过滤:"), 1, 0)
         filter_row = QHBoxLayout()
@@ -603,17 +636,20 @@ class PixivFilterApp(QMainWindow):
         self.model_identify_checkbox1 = QCheckBox("模型识别")
         pid_layout.addWidget(self.model_identify_checkbox1)
 
-        pid_layout.addWidget(QLabel("下载限制:"))
-        limit_row = QHBoxLayout()
-        self.download_limit_spin = QSpinBox()
-        self.download_limit_spin.setMinimum(0)
-        self.download_limit_spin.setMaximum(9999)
-        self.download_limit_spin.setValue(5)
-        self.limit_mode_combo = QComboBox()
-        self.limit_mode_combo.addItems(["图片张数", "PID个数"])
-        limit_row.addWidget(self.download_limit_spin)
-        limit_row.addWidget(self.limit_mode_combo)
-        pid_layout.addLayout(limit_row)
+        pid_layout.addWidget(QLabel("下载方式:"))
+        self.dl_mode_combo1 = QComboBox()
+        self.dl_mode_combo1.addItems(["页数模式", "图片张数", "PID个数"])
+        pid_layout.addWidget(self.dl_mode_combo1)
+        self.dl_spin1 = QSpinBox()
+        self.dl_spin1.setMinimum(1)
+        self.dl_spin1.setMaximum(20)
+        self.dl_spin1.setValue(1)
+        pid_layout.addWidget(self.dl_spin1)
+        def _update_dl_spin1():
+            m = self.dl_mode_combo1.currentText()
+            self.dl_spin1.setMaximum(20 if m == "页数模式" else 100)
+            self.dl_spin1.setValue(1)
+        self.dl_mode_combo1.currentIndexChanged.connect(_update_dl_spin1)
 
         pid_filter_group.setLayout(pid_layout)
         right_layout.addWidget(pid_filter_group)
@@ -742,24 +778,20 @@ class PixivFilterApp(QMainWindow):
         self.r18_only_checkbox2.stateChanged.connect(_update_r18_state2)
         _update_r18_state2()
 
-        filter_layout.addWidget(QLabel("搜索页数:"))
-        self.pages_spinbox2 = QSpinBox()
-        self.pages_spinbox2.setMinimum(1)
-        self.pages_spinbox2.setMaximum(20)
-        self.pages_spinbox2.setValue(1)
-        filter_layout.addWidget(self.pages_spinbox2)
-
-        filter_layout.addWidget(QLabel("下载限制:"))
-        limit_row2 = QHBoxLayout()
-        self.download_limit_spin2 = QSpinBox()
-        self.download_limit_spin2.setMinimum(0)
-        self.download_limit_spin2.setMaximum(9999)
-        self.download_limit_spin2.setValue(5)
-        self.limit_mode_combo2 = QComboBox()
-        self.limit_mode_combo2.addItems(["图片张数", "PID个数"])
-        limit_row2.addWidget(self.download_limit_spin2)
-        limit_row2.addWidget(self.limit_mode_combo2)
-        filter_layout.addLayout(limit_row2)
+        filter_layout.addWidget(QLabel("下载方式:"))
+        self.dl_mode_combo2 = QComboBox()
+        self.dl_mode_combo2.addItems(["页数模式", "图片张数", "PID个数"])
+        filter_layout.addWidget(self.dl_mode_combo2)
+        self.dl_spin2 = QSpinBox()
+        self.dl_spin2.setMinimum(1)
+        self.dl_spin2.setMaximum(20)
+        self.dl_spin2.setValue(1)
+        filter_layout.addWidget(self.dl_spin2)
+        def _update_dl_spin2():
+            m = self.dl_mode_combo2.currentText()
+            self.dl_spin2.setMaximum(20 if m == "页数模式" else 100)
+            self.dl_spin2.setValue(1)
+        self.dl_mode_combo2.currentIndexChanged.connect(_update_dl_spin2)
 
         self.model_identify_checkbox2 = QCheckBox("模型识别")
         filter_layout.addWidget(self.model_identify_checkbox2)
@@ -872,7 +904,7 @@ class PixivFilterApp(QMainWindow):
         model_group.setLayout(model_layout)
         layout.addWidget(model_group)
 
-        # PID内页数限制设置
+        # PID内张数限制设置
         page_limit_group = QGroupBox("下载过滤")
         page_limit_layout = QVBoxLayout()
 
@@ -888,7 +920,7 @@ class PixivFilterApp(QMainWindow):
         self.page_limit_spin.setEnabled(False)
         page_limit_row.addWidget(self.page_limit_spin)
 
-        page_limit_row.addWidget(QLabel("页则跳过该PID"))
+        page_limit_row.addWidget(QLabel("张则跳过该PID"))
         page_limit_layout.addLayout(page_limit_row)
 
         page_limit_group.setLayout(page_limit_layout)
@@ -913,7 +945,7 @@ class PixivFilterApp(QMainWindow):
         self.default_img_combo = QComboBox()
         self.default_img_combo.setMinimumWidth(200)
         img_row.addWidget(self.default_img_combo, 1)
-        self.browse_default_img_btn = QPushButton("浏览...")
+        self.browse_default_img_btn = QPushButton("添加")
         self.browse_default_img_btn.clicked.connect(self._on_browse_default_image)
         img_row.addWidget(self.browse_default_img_btn)
         default_img_layout.addLayout(img_row)
@@ -1052,7 +1084,7 @@ class PixivFilterApp(QMainWindow):
             self.model_identify_checkbox2.setChecked(False)
 
     def _on_page_limit_toggled(self, checked):
-        """PID页数限制复选框切换时联动 spinbox"""
+        """PID张数限制复选框切换时联动 spinbox"""
         self.page_limit_spin.setEnabled(checked)
 
     # ==================== 默认图片设置 ====================
@@ -1062,63 +1094,48 @@ class PixivFilterApp(QMainWindow):
         self.default_img_combo.clear()
 
         exts = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
-        # (显示名称, 完整路径, 来源标签)
         image_entries = []
-        seen_names = set()
+        seen = set()
 
-        # 1. 扫描打包预设目录（只读，来自 PyInstaller 或开发目录）
-        preset_dir = resource_path(os.path.join('theme', 'default_image'))
-        if os.path.isdir(preset_dir):
-            for f in os.listdir(preset_dir):
-                if f.lower().endswith(exts) and os.path.isfile(os.path.join(preset_dir, f)):
-                    path = os.path.abspath(os.path.join(preset_dir, f))
-                    image_entries.append((f, path, '预设'))
-                    seen_names.add(f.lower())
+        # 扫描 theme/default_image/ 和 theme/added_image/（同名文件后者覆盖前者）
+        dirs = [
+            ('default', os.path.join(os.path.abspath("."), 'theme', 'default_image')),
+            ('added', os.path.join(os.path.abspath("."), 'theme', 'added_image')),
+        ]
 
-        # 2. 扫描用户程序目录（可读写，优先级更高，同名文件覆盖预设）
-        user_dir = os.path.join(os.path.abspath("."), 'theme', 'default_image')
-        rel_path = os.path.relpath(user_dir, os.path.abspath("."))
-        if os.path.isdir(user_dir):
-            for f in os.listdir(user_dir):
-                if f.lower().endswith(exts) and os.path.isfile(os.path.join(user_dir, f)):
-                    path = os.path.abspath(os.path.join(user_dir, f))
-                    if f.lower() in seen_names:
-                        # 替换预设的同名文件为用户版本
-                        for i, (name, p, src) in enumerate(image_entries):
-                            if name.lower() == f.lower():
-                                image_entries[i] = (f, path, rel_path)
-                                break
-                    else:
-                        image_entries.append((f, path, rel_path))
-                        seen_names.add(f.lower())
+        for tag, d in dirs:
+            if os.path.isdir(d):
+                for f in sorted(os.listdir(d)):
+                    if f.lower().endswith(exts) and os.path.isfile(os.path.join(d, f)):
+                        path = os.path.abspath(os.path.join(d, f))
+                        key = f.lower()
+                        if key not in seen:
+                            image_entries.append((f, path, tag))
+                            seen.add(key)
+                        else:
+                            for i, (name, p, t) in enumerate(image_entries):
+                                if name.lower() == key:
+                                    image_entries[i] = (f, path, tag)
+                                    break
 
-        # 3. 扫描用户添加目录（通过浏览按钮添加的图片）
-        added_dir = os.path.join(os.path.abspath("."), 'theme', 'added_image')
-        added_rel = os.path.relpath(added_dir, os.path.abspath("."))
-        if os.path.isdir(added_dir):
-            for f in os.listdir(added_dir):
-                if f.lower().endswith(exts) and os.path.isfile(os.path.join(added_dir, f)):
-                    path = os.path.abspath(os.path.join(added_dir, f))
-                    if f.lower() in seen_names:
-                        for i, (name, p, src) in enumerate(image_entries):
-                            if name.lower() == f.lower():
-                                image_entries[i] = (f, path, added_rel)
-                                break
-                    else:
-                        image_entries.append((f, path, added_rel))
-                        seen_names.add(f.lower())
-
-        # 按文件名排序
-        image_entries.sort(key=lambda x: x[0].lower())
+        # 分开排序：预设在前，added在后，各自按文件名排序
+        default_entries = sorted([e for e in image_entries if e[2] == 'default'], key=lambda x: x[0].lower())
+        added_entries = sorted([e for e in image_entries if e[2] == 'added'], key=lambda x: x[0].lower())
 
         if image_entries:
-            for fname, path, source in image_entries:
-                display_text = f"{fname} ({source})"
-                self.default_img_combo.addItem(display_text, path)
+            for fname, path, tag in default_entries + added_entries:
+                if tag == 'default':
+                    name_no_ext = os.path.splitext(fname)[0]
+                    display = f"预设{name_no_ext}"
+                else:
+                    rel = os.path.relpath(path, os.path.abspath("."))
+                    display = f"{fname} ({rel})"
+                self.default_img_combo.addItem(display, path)
         else:
             self.default_img_combo.addItem("（未找到图片文件）", "")
 
-        # 根据当前选中的 tab 恢复已保存的选择
+        # 在最前面插入"无"选项
+        self.default_img_combo.insertItem(0, "无", "")
         self._sync_default_img_combo()
         self.default_img_combo.blockSignals(False)
 
@@ -1126,29 +1143,35 @@ class PixivFilterApp(QMainWindow):
         """同步下拉列表显示当前 tab 已保存的默认图片"""
         tab_idx = self.default_tab_combo.currentIndex()
         current_default = self.default_image_tab1 if tab_idx == 0 else self.default_image_tab2
-        if current_default:
+        if current_default == "":
+            self.default_img_combo.setCurrentIndex(0)  # 选中"无"
+        elif current_default:
             idx = self.default_img_combo.findData(current_default)
+            if idx < 0:
+                idx = self.default_img_combo.findText(os.path.basename(current_default), Qt.MatchFlag.MatchContains)
             if idx >= 0:
                 self.default_img_combo.setCurrentIndex(idx)
-            else:
-                # 如果当前默认图片不在列表中，添加它
-                self.default_img_combo.insertItem(0, os.path.basename(current_default), current_default)
-                self.default_img_combo.setCurrentIndex(0)
 
     def _on_default_tab_changed(self, index):
         """切换 Tab 选择时，显示对应的默认图片"""
         self._sync_default_img_combo()
         current = self.default_image_tab1 if index == 0 else self.default_image_tab2
-        self.default_img_status.setText(f"当前: {os.path.basename(current)}")
+        # 尝试用下拉框显示文字
+        idx = self.default_img_combo.findData(current)
+        display = self.default_img_combo.itemText(idx) if idx >= 0 else os.path.basename(current)
+        self.default_img_status.setText(f"当前: {display}")
 
     def _on_default_image_selected(self, index):
         """从下拉列表选择默认图片时，保存到对应的 tab"""
         if index < 0:
             return
         img_path = self.default_img_combo.currentData()
-        if not img_path or not os.path.exists(img_path):
+        if not img_path and img_path != "":
+            return
+        if img_path and not os.path.exists(img_path):
             return
 
+        display_name = self.default_img_combo.currentText()
         tab_idx = self.default_tab_combo.currentIndex()
         if tab_idx == 0:
             self.default_image_tab1 = img_path
@@ -1156,8 +1179,16 @@ class PixivFilterApp(QMainWindow):
             self.default_image_tab2 = img_path
 
         self._save_config()
-        self.default_img_status.setText(f"✅ 已设置: {os.path.basename(img_path)}")
+        self.default_img_status.setText(f"✅ 已设置: {display_name}")
         self.default_img_status.setStyleSheet("padding: 4px; color: green;")
+
+        # 刷新对应 tab 的展示框
+        if tab_idx == 0:
+            self._zoom1 = 0
+            self.update_image_display(label=self.image_label)
+        else:
+            self._zoom2 = 0
+            self.update_image_display(label=self.image_label2)
 
     def _on_browse_default_image(self):
         """浏览并选择一张图片，复制到 theme/added_image 并设为默认图片"""
@@ -1207,11 +1238,15 @@ class PixivFilterApp(QMainWindow):
         self.tab_btn2.setStyleSheet(active if index == 1 else inactive)
         self.tab_btn3.setStyleSheet(active if index == 2 else inactive)
 
-        # 切换到没有初始化图片的 tab 时显示默认图片（自适应）
+        # 切换到对应的 tab 时重新自适应展示
         if index == 1 and self._pixmap2 is None:
             QTimer.singleShot(0, lambda: self.update_image_display(label=self.image_label2))
         elif index == 0 and self._pixmap1 is None:
             QTimer.singleShot(0, self.update_image_display)
+        elif index == 1 and self._pixmap2 is not None:
+            QTimer.singleShot(0, lambda: self._apply_zoom(self.image_label2, self._zoom2))
+        elif index == 0 and self._pixmap1 is not None:
+            QTimer.singleShot(0, lambda: self._apply_zoom(self.image_label, self._zoom1))
 
     def _set_app_icon(self):
         """设置窗口图标（使用 pixiv.ico）"""
@@ -1239,12 +1274,10 @@ class PixivFilterApp(QMainWindow):
 
         if os.path.exists(image_path):
             pixmap = QPixmap(image_path)
-            # 保存原图引用
             if label is self.image_label:
                 self._pixmap1 = pixmap
             else:
                 self._pixmap2 = pixmap
-            # 缩放显示
             zoom = self._zoom1 if label is self.image_label else self._zoom2
             self._apply_zoom(label, zoom)
             fname = os.path.basename(image_path)
@@ -1255,6 +1288,16 @@ class PixivFilterApp(QMainWindow):
                 self.filename_label.setText(display_name)
             else:
                 self.filename_label2.setText(display_name)
+        elif not image_path:
+            # 选择"无"时清空展示
+            label.clear()
+            label.setText("")
+            if label is self.image_label:
+                self._pixmap1 = None
+                self.filename_label.clear()
+            else:
+                self._pixmap2 = None
+                self.filename_label2.clear()
         else:
             label.setText(f"图片不存在: {image_path}")
             if label is self.image_label:
@@ -1381,11 +1424,22 @@ class PixivFilterApp(QMainWindow):
         self.stop_btn.setVisible(True)
         self._search_paused = False
 
+        # 解析下载方式
+        dl_mode1 = self.dl_mode_combo1.currentText()
+        if dl_mode1 == "页数模式":
+            dl_pages1 = self.dl_spin1.value()
+            dl_limit1 = 0
+            dl_limit_mode1 = "图片张数"
+        else:
+            dl_pages1 = 20
+            dl_limit1 = self.dl_spin1.value()
+            dl_limit_mode1 = dl_mode1
+
         # 使用QThread + moveToThread方式处理耗时操作
         self.search_worker = SearchWorker(
-            content, php, r18_rem, r18g_rem, int(self.pages_spinbox.value()),
-            download_limit=int(self.download_limit_spin.value()),
-            limit_mode=self.limit_mode_combo.currentText(),
+            content, php, r18_rem, r18g_rem, dl_pages1,
+            download_limit=dl_limit1,
+            limit_mode=dl_limit_mode1,
             model_identify=self.model_identify_checkbox1.isChecked(),
             model_path=model_path,
             page_limit_enabled=self.page_limit_checkbox.isChecked(),
@@ -1448,7 +1502,7 @@ class PixivFilterApp(QMainWindow):
         self.next_btn.setEnabled(False)
         self.model_identify_checkbox1.setEnabled(True)
         self.stop_btn.setVisible(False)
-        QMessageBox.critical(self, "错误", f"搜索失败: {msg}")
+        self.info_box.append(f"❌ 搜索失败: {msg}")
 
     # ==================== Tab2 搜索 ====================
     def on_search_clicked2(self):
@@ -1501,11 +1555,22 @@ class PixivFilterApp(QMainWindow):
         self.stop_btn2.setVisible(True)
         self._search_paused2 = False
 
+        # 解析下载方式
+        dl_mode2 = self.dl_mode_combo2.currentText()
+        if dl_mode2 == "页数模式":
+            dl_pages2 = self.dl_spin2.value()
+            dl_limit2 = 0
+            dl_limit_mode2 = "图片张数"
+        else:
+            dl_pages2 = 20
+            dl_limit2 = self.dl_spin2.value()
+            dl_limit_mode2 = dl_mode2
+
         # 使用QThread + moveToThread方式处理耗时操作
         self.search_worker2 = SearchWorker(
-            content, php, r18_rem, r18g_rem, int(self.pages_spinbox2.value()),
-            download_limit=int(self.download_limit_spin2.value()),
-            limit_mode=self.limit_mode_combo2.currentText(),
+            content, php, r18_rem, r18g_rem, dl_pages2,
+            download_limit=dl_limit2,
+            limit_mode=dl_limit_mode2,
             model_identify=self.model_identify_checkbox2.isChecked(),
             model_path=model_path,
             page_limit_enabled=self.page_limit_checkbox.isChecked(),
@@ -1564,7 +1629,7 @@ class PixivFilterApp(QMainWindow):
         self.next_btn2.setEnabled(False)
         self.model_identify_checkbox2.setEnabled(True)
         self.stop_btn2.setVisible(False)
-        QMessageBox.critical(self, "错误", f"搜索失败: {msg}")
+        self.info_box2.append(f"❌ 搜索失败: {msg}")
 
     # ==================== Tab1 保存 ====================
     def on_save_clicked(self):

@@ -16,3 +16,4 @@ release
 .venv_cpu
 model_script/__pycache__
 others
+small_projects

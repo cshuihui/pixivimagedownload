@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QSpinBox, QCheckBox, QPushButton, QGroupBox, QScrollArea,
     QMessageBox, QComboBox, QGridLayout, QTextEdit, QStackedWidget, QFileDialog
 )
-from PySide6.QtGui import QPixmap, QFont, QIcon, QWheelEvent, QMouseEvent
+from PySide6.QtGui import QPixmap, QFont, QIcon, QWheelEvent, QMouseEvent, QShortcut, QKeySequence
 from PySide6.QtCore import Qt, QThread, QObject, Signal, Slot, QTimer, QEvent, QPoint
 
 import shutil
@@ -360,6 +360,22 @@ class GetPHPSESSIDWorker(QObject):
             self.error.emit(str(e))
 
 
+class CheckPHPSESSIDWorker(QObject):
+    finished = Signal(bool, str)  # (success, message)
+
+    def __init__(self, php):
+        super().__init__()
+        self.php = php
+
+    @Slot()
+    def run(self):
+        try:
+            success, msg = check_pixiv(self.php)
+            self.finished.emit(success, msg)
+        except Exception as e:
+            self.finished.emit(False, f"检测异常: {e}")
+
+
 # ==================== PyQt应用类 ====================
 class PixivFilterApp(QMainWindow):
     def __init__(self):
@@ -475,6 +491,12 @@ class PixivFilterApp(QMainWindow):
 
         # 拖拽状态
         self._drag_pos = None
+
+        # 全局快捷键：左右方向键映射到上下一张
+        self._shortcut_left = QShortcut(QKeySequence(Qt.Key_Left), self)
+        self._shortcut_left.activated.connect(self._on_shortcut_prev)
+        self._shortcut_right = QShortcut(QKeySequence(Qt.Key_Right), self)
+        self._shortcut_right.activated.connect(self._on_shortcut_next)
 
     # ==================== 配置读写 ====================
     def _load_config(self):
@@ -1007,7 +1029,7 @@ class PixivFilterApp(QMainWindow):
         self.php_status_label.setStyleSheet("color: red; padding: 4px;")
 
     def _on_check_phpsessid(self):
-        """检测 PHPSESSID 是否有效"""
+        """检测 PHPSESSID 是否有效（异步，不阻塞 UI）"""
         php = self.php_input_global.text().strip()
         if not php:
             self.php_status_label.setText("❌ PHPSESSID 为空")
@@ -1016,20 +1038,32 @@ class PixivFilterApp(QMainWindow):
 
         self.check_php_btn.setEnabled(False)
         self.check_php_btn.setText("检测中...")
-        success, msg = check_pixiv(php)
+        self.php_status_label.setText("检测中...")
+        self.php_status_label.setStyleSheet("color: blue; padding: 4px;")
+
+        # 线程执行，避免阻塞 UI
+        self._check_worker = CheckPHPSESSIDWorker(php)
+        self._check_thread = QThread()
+        self._check_worker.moveToThread(self._check_thread)
+        self._check_worker.finished.connect(self._on_check_result)
+        self._check_thread.started.connect(self._check_worker.run)
+        self._check_worker.finished.connect(self._check_thread.quit)
+        self._check_thread.start()
+
+    def _on_check_result(self, success, msg):
+        """检测完成回调"""
         self.check_php_btn.setEnabled(True)
         self.check_php_btn.setText("检测")
         self.php_status_label.setText(msg)
         self.php_status_label.setStyleSheet("color: green; padding: 4px;" if success else "color: red; padding: 4px;")
 
+        php = self.php_input_global.text().strip()
         if success:
-            # 写入文件并禁用获取按钮
             with open(phpsessid_file, 'w') as f:
                 f.write(php)
             self.get_php_btn.setEnabled(False)
             self.php_status_label.setText("✅ 已保存到 phpsessid.txt")
         else:
-            # 检测失败则恢复获取按钮
             self.get_php_btn.setEnabled(True)
 
     def _on_browse_model_dir(self):
@@ -1406,8 +1440,11 @@ class PixivFilterApp(QMainWindow):
         self.php_session = php
 
         self.image_list_tab1.clear()
-        self.image_label.clear()
+        # 清除图像显示：设置空白 pixmap 避免闪旧图
+        self.image_label.setPixmap(QPixmap())
         self.image_label.setText("搜索中...")
+        self.image_label.repaint()
+        QApplication.processEvents()
         self.info_box.clear()
 
         r18_rem = 0 if self.r18_checkbox.isChecked() else 1
@@ -1538,8 +1575,11 @@ class PixivFilterApp(QMainWindow):
         self.php_session = php
 
         self.image_list_tab2.clear()
-        self.image_label2.clear()
+        # 清除图像显示：设置空白 pixmap 避免闪旧图
+        self.image_label2.setPixmap(QPixmap())
         self.image_label2.setText("搜索中...")
+        self.image_label2.repaint()
+        QApplication.processEvents()
         self.info_box2.clear()
 
         r18_rem = 0 if self.r18_checkbox2.isChecked() else 1
@@ -1666,24 +1706,74 @@ class PixivFilterApp(QMainWindow):
         
         self.save_thread.start()
 
+    def show_toast(self, message, toast_type="success", duration=2000):
+        """显示一个浮窗提示，过一段时间自动消失（重复调用会替换上一个）"""
+        # 删除上一个浮窗
+        if hasattr(self, '_current_toast') and self._current_toast is not None:
+            try:
+                self._current_toast.deleteLater()
+                self._current_toast = None
+            except RuntimeError:
+                pass
+
+        color_map = {
+            "success": "#28a745",
+            "error": "#dc3545",
+            "warning": "#ffc107",
+            "info": "#17a2b8",
+        }
+        bg_color = color_map.get(toast_type, "#28a745")
+        text_color = "#fff" if toast_type != "warning" else "#333"
+
+        toast = QLabel(message, self)
+        toast.setStyleSheet(f"""
+            QLabel {{
+                background-color: {bg_color};
+                color: {text_color};
+                padding: 10px 24px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+            }}
+        """)
+        toast.adjustSize()
+
+        # 居中显示在窗口顶部
+        x = (self.width() - toast.width()) // 2
+        y = 20
+        toast.move(x, y)
+        toast.show()
+
+        # 保存引用并定时消失
+        self._current_toast = toast
+        QTimer.singleShot(duration, lambda: self._clear_toast(toast))
+
+    def _clear_toast(self, toast):
+        """清除指定的浮窗（避免误删新浮窗）"""
+        try:
+            if hasattr(self, '_current_toast') and self._current_toast is toast:
+                self._current_toast = None
+            toast.deleteLater()
+        except RuntimeError:
+            pass
+
     def _on_save_done(self):
         if self.pid_filter_checkbox.isChecked():
             pid_filter_add(self._save_pid, True)
 
         self.save_btn.setEnabled(True)
-        self.save_btn.setText("✅ 已保存")
-        # 2秒后恢复按钮文字
-        QTimer.singleShot(2000, lambda: self.save_btn.setText("✅ 保存") if self.save_btn.text() == "✅ 已保存" else None)
+        self.save_btn.setText("✅ 保存")
+        self.show_toast("✅ 保存成功", "success")
 
     def _on_save_error(self, msg):
         self.save_btn.setEnabled(True)
-        self.save_btn.setText("❌ 失败")
-        QTimer.singleShot(2000, lambda: self.save_btn.setText("✅ 保存") if self.save_btn.text() == "❌ 失败" else None)
+        self.save_btn.setText("✅ 保存")
+        self.show_toast(f"❌ 保存失败: {msg}", "error", 3000)
 
     def _on_save_exists(self, name):
         self.save_btn.setEnabled(True)
         self.save_btn.setText("✅ 保存")
-        QMessageBox.information(self, "提示", f"文件已存在: {name}")
+        self.show_toast(f"⚠️ 文件已存在: {name}", "warning", 2500)
 
     # ==================== Tab2 保存 ====================
     def on_save_clicked2(self):
@@ -1720,18 +1810,18 @@ class PixivFilterApp(QMainWindow):
             pid_filter_add(self._save_pid2, True)
 
         self.save_btn2.setEnabled(True)
-        self.save_btn2.setText("✅ 已保存")
-        QTimer.singleShot(2000, lambda: self.save_btn2.setText("✅ 保存") if self.save_btn2.text() == "✅ 已保存" else None)
+        self.save_btn2.setText("✅ 保存")
+        self.show_toast("✅ 保存成功", "success")
 
     def _on_save_error2(self, msg):
         self.save_btn2.setEnabled(True)
-        self.save_btn2.setText("❌ 失败")
-        QTimer.singleShot(2000, lambda: self.save_btn2.setText("✅ 保存") if self.save_btn2.text() == "❌ 失败" else None)
+        self.save_btn2.setText("✅ 保存")
+        self.show_toast(f"❌ 保存失败: {msg}", "error", 3000)
 
     def _on_save_exists2(self, name):
         self.save_btn2.setEnabled(True)
         self.save_btn2.setText("✅ 保存")
-        QMessageBox.information(self, "提示", f"文件已存在: {name}")
+        self.show_toast(f"⚠️ 文件已存在: {name}", "warning", 2500)
 
     # ==================== 导航：上一张 / 下一张 ====================
     def _reset_save_btn(self):
@@ -1748,6 +1838,8 @@ class PixivFilterApp(QMainWindow):
             self.current_index -= 1
             self.update_image_display(self.current_index)
             self._reset_save_btn()
+        else:
+            self.show_toast("已经是第一张啦~", "warning", 1500)
 
     def on_next_clicked(self):
         if not self.image_list_tab1:
@@ -1756,6 +1848,8 @@ class PixivFilterApp(QMainWindow):
             self.current_index += 1
             self.update_image_display(self.current_index)
             self._reset_save_btn()
+        else:
+            self.show_toast("已经是最后一张啦~", "warning", 1500)
 
     def on_prev_clicked2(self):
         if not self.image_list_tab2:
@@ -1764,6 +1858,8 @@ class PixivFilterApp(QMainWindow):
             self.current_index2 -= 1
             self.update_image_display(self.current_index2, self.image_label2)
             self._reset_save_btn2()
+        else:
+            self.show_toast("已是第一张", "warning", 1500)
 
     def on_next_clicked2(self):
         if not self.image_list_tab2:
@@ -1772,6 +1868,23 @@ class PixivFilterApp(QMainWindow):
             self.current_index2 += 1
             self.update_image_display(self.current_index2, self.image_label2)
             self._reset_save_btn2()
+        else:
+            self.show_toast("已是最后一张", "warning", 1500)
+
+    # ==================== 键盘快捷键 ====================
+    def _on_shortcut_prev(self):
+        """全局快捷键：← 上一张"""
+        if self.stack.currentIndex() == 0:
+            self.on_prev_clicked()
+        else:
+            self.on_prev_clicked2()
+
+    def _on_shortcut_next(self):
+        """全局快捷键：→ 下一张"""
+        if self.stack.currentIndex() == 0:
+            self.on_next_clicked()
+        else:
+            self.on_next_clicked2()
 
     # ==================== 资源清理 ====================
     def closeEvent(self, event):

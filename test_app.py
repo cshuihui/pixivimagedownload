@@ -13,6 +13,7 @@ from PySide6.QtGui import QPixmap, QFont, QIcon, QWheelEvent, QMouseEvent, QShor
 from PySide6.QtCore import Qt, QThread, QObject, Signal, Slot, QTimer, QEvent, QPoint
 
 import shutil
+import pathlib
 import pixiv_id
 from pixiv_image_download import link_to_image, filename_extract_index
 from pixiv_imagelink import link_find
@@ -336,11 +337,17 @@ class SaveWorker(QObject):
             idx = int(self.image_index) if self.image_index is not None else 0
             page_url = pid_links['links'][idx + 1]['original']
             page_name = page_url.split('/')[-1]
-            save_path = os.path.join(self.save_subdir, page_name)
-            # 检查文件是否已存在
-            if os.path.exists(save_path):
+
+            # 递归检查 saved/ 下所有子目录是否有同名文件
+            found = False
+            for f in pathlib.Path(save_dir).rglob(page_name):
+                if f.is_file():
+                    found = True
+                    break
+            if found:
                 self.exists.emit(page_name)
                 return
+
             link_to_image(self.save_subdir, page_name, page_url, self.php)
             self.finished.emit()
         except Exception as e:
@@ -1587,9 +1594,6 @@ class PixivFilterApp(QMainWindow):
         self.prev_btn3.setEnabled(enabled)
         self.next_btn3.setEnabled(enabled)
 
-    def _reset_save_btn3(self):
-        self.save_btn3.setText("✅ 保存")
-
     def on_search_clicked3(self):
         """按作者ID搜索"""
         if self.search_thread3 and self.search_thread3.isRunning():
@@ -1704,58 +1708,6 @@ class PixivFilterApp(QMainWindow):
         self.stop_btn3.setVisible(False)
         self.info_box3.append("⏹ 已停止搜索")
 
-    # ==================== Tab3 保存 ====================
-    def on_save_clicked3(self):
-        if not (0 <= self.current_index3 < len(self.image_list_tab3)):
-            QMessageBox.warning(self, "警告", "没有有效的图片可保存")
-            return
-
-        img_path = self.image_list_tab3[self.current_index3]
-        image_filename = os.path.basename(img_path)
-        image_index = filename_extract_index(image_filename)
-        save_pid = filename_split(image_filename)
-        php = self.php_input_global.text()
-
-        # 作者名作为子目录
-        author_subdir = ""
-        if hasattr(self, '_author_name'):
-            author_subdir = self._author_name
-        else:
-            author_subdir = self.author_id_input.text().strip()
-
-        # 每次点击都创建独立的保存线程
-        self._save_worker3 = SaveWorker(os.path.join(save_dir, author_subdir), php, image_index, save_pid)
-        self._save_thread3 = QThread()
-        self._save_worker3.moveToThread(self._save_thread3)
-
-        self._save_worker3.finished.connect(self._on_save3_done)
-        self._save_worker3.error.connect(self._on_save3_error)
-        self._save_worker3.exists.connect(self._on_save3_exists)
-        self._save_thread3.started.connect(self._save_worker3.run)
-        self._save_worker3.finished.connect(self._save_thread3.quit)
-        self._save_worker3.error.connect(self._save_thread3.quit)
-        self._save_worker3.exists.connect(self._save_thread3.quit)
-        self._save_thread3.finished.connect(self._on_save3_thread_finished)
-
-        self._save_thread3.start()
-        self.show_toast("📥 开始保存...", "info", 1000)
-
-    def _on_save3_thread_finished(self):
-        """保存线程结束后清理引用"""
-        self._save_worker3 = None
-        self._save_thread3 = None
-
-    def _on_save3_done(self):
-        if self.pid_filter_checkbox3.isChecked():
-            pid_filter_add(self._save_pid3, True)
-        self.show_toast("✅ 保存成功", "success")
-
-    def _on_save3_error(self, msg):
-        self.show_toast(f"❌ 保存失败: {msg}", "error", 3000)
-
-    def _on_save3_exists(self, name):
-        self.show_toast(f"⚠️ 文件已存在: {name}", "warning", 2500)
-
     # ==================== Tab3 导航 ====================
     def on_prev_clicked3(self):
         if not self.image_list_tab3:
@@ -1763,7 +1715,7 @@ class PixivFilterApp(QMainWindow):
         if self.current_index3 > 0:
             self.current_index3 -= 1
             self.update_image_display(self.current_index3, self.image_label3)
-            self._reset_save_btn3()
+            self._update_save_btn_state(self.image_list_tab3, self.current_index3, self.save_btn3)
         else:
             self.show_toast("已经是第一张啦~", "warning", 1500)
 
@@ -1773,7 +1725,7 @@ class PixivFilterApp(QMainWindow):
         if self.current_index3 < len(self.image_list_tab3) - 1:
             self.current_index3 += 1
             self.update_image_display(self.current_index3, self.image_label3)
-            self._reset_save_btn3()
+            self._update_save_btn_state(self.image_list_tab3, self.current_index3, self.save_btn3)
         else:
             self.show_toast("已经是最后一张啦~", "warning", 1500)
 
@@ -2209,40 +2161,6 @@ class PixivFilterApp(QMainWindow):
         self.info_box2.append(f"❌ 搜索失败: {msg}")
 
     # ==================== Tab1 保存 ====================
-    def on_save_clicked(self):
-        if not (0 <= self.current_index < len(self.image_list_tab1)):
-            QMessageBox.warning(self, "警告", "没有有效的图片可保存")
-            return
-
-        search_con = self.keywords_input.text().strip()
-        if not search_con:
-            QMessageBox.warning(self, "警告", "请先输入搜索关键词")
-            return
-
-        img_path = self.image_list_tab1[self.current_index]
-        image_filename = os.path.basename(img_path)
-        image_index = filename_extract_index(image_filename)
-        self._save_pid = filename_split(image_filename)
-        php = self.php_input_global.text()
-
-        self.save_btn.setEnabled(False)
-        self.save_btn.setText("保存中...")
-
-        # 使用QThread + moveToThread方式处理保存操作
-        self.save_worker = SaveWorker(os.path.join(save_dir, search_con), php, image_index, self._save_pid)
-        self.save_thread = QThread()
-        self.save_worker.moveToThread(self.save_thread)
-        
-        self.save_worker.finished.connect(self._on_save_done)
-        self.save_worker.error.connect(self._on_save_error)
-        self.save_worker.exists.connect(self._on_save_exists)
-        self.save_thread.started.connect(self.save_worker.run)
-        self.save_worker.finished.connect(self.save_thread.quit)
-        self.save_worker.error.connect(self.save_thread.quit)
-        self.save_worker.exists.connect(self.save_thread.quit)
-        
-        self.save_thread.start()
-
     def show_toast(self, message, toast_type="success", duration=2000):
         """显示一个浮窗提示，过一段时间自动消失（重复调用会替换上一个）"""
         # 删除上一个浮窗
@@ -2297,87 +2215,155 @@ class PixivFilterApp(QMainWindow):
         except RuntimeError:
             pass
 
-    def _on_save_done(self):
-        if self.pid_filter_checkbox.isChecked():
-            pid_filter_add(self._save_pid, True)
+    # ==================== 统一保存方法（Tab1/Tab2/Tab3 共用） ====================
+    def _do_save(self, save_subdir, btn, pid_attr, filter_checkbox):
+        """统一的保存逻辑
 
-        self.save_btn.setEnabled(True)
-        self.save_btn.setText("✅ 保存")
-        self.show_toast("✅ 保存成功", "success")
+        Args:
+            save_subdir: 保存子目录 (saved/{关键词}/)
+            btn: 对应的保存按钮 (save_btn / save_btn2 / save_btn3)
+            pid_attr: 存储 pid 的属性名，如 '_save_pid'
+            filter_checkbox: pid 屏蔽复选框
+        """
+        # 确定当前 tab 的图片列表和索引
+        if btn is self.save_btn:
+            img_list = self.image_list_tab1
+            idx = self.current_index
+            image_label = self.image_label
+        elif btn is self.save_btn2:
+            img_list = self.image_list_tab2
+            idx = self.current_index2
+            image_label = self.image_label2
+        else:
+            img_list = self.image_list_tab3
+            idx = self.current_index3
+            image_label = self.image_label3
 
-    def _on_save_error(self, msg):
-        self.save_btn.setEnabled(True)
-        self.save_btn.setText("✅ 保存")
-        self.show_toast(f"❌ 保存失败: {msg}", "error", 3000)
-
-    def _on_save_exists(self, name):
-        self.save_btn.setEnabled(True)
-        self.save_btn.setText("✅ 保存")
-        self.show_toast(f"⚠️ 文件已存在: {name}", "warning", 2500)
-
-    # ==================== Tab2 保存 ====================
-    def on_save_clicked2(self):
-        if not (0 <= self.current_index2 < len(self.image_list_tab2)):
+        if not (0 <= idx < len(img_list)):
             QMessageBox.warning(self, "警告", "没有有效的图片可保存")
             return
 
-        img_path = self.image_list_tab2[self.current_index2]
+        # Tab1 特殊：需要搜索关键词作为保存目录（已由调用方传入 save_subdir）
+        # Tab3 特殊：需要作者名（已由调用方传入 save_subdir）
+
+        img_path = img_list[idx]
         image_filename = os.path.basename(img_path)
         image_index = filename_extract_index(image_filename)
-        self._save_pid2 = filename_split(image_filename)
+        save_pid = filename_split(image_filename)
+        setattr(self, pid_attr, save_pid)
         php = self.php_input_global.text()
 
-        self.save_btn2.setEnabled(False)
-        self.save_btn2.setText("保存中...")
+        # 标记此图片正在保存
+        if not hasattr(self, '_saving_paths'):
+            self._saving_paths = set()
+        self._saving_paths.add(img_path)
+        btn.setEnabled(False)
+        btn.setText("保存中...")
 
-        # 使用QThread + moveToThread方式处理保存操作
-        self.save_worker2 = SaveWorker(os.path.join(save_dir, '纳西妲'), php, image_index, self._save_pid2)
-        self.save_thread2 = QThread()
-        self.save_worker2.moveToThread(self.save_thread2)
-        
-        self.save_worker2.finished.connect(self._on_save_done2)
-        self.save_worker2.error.connect(self._on_save_error2)
-        self.save_worker2.exists.connect(self._on_save_exists2)
-        self.save_thread2.started.connect(self.save_worker2.run)
-        self.save_worker2.finished.connect(self.save_thread2.quit)
-        self.save_worker2.error.connect(self.save_thread2.quit)
-        self.save_worker2.exists.connect(self.save_thread2.quit)
-        
-        self.save_thread2.start()
+        worker = SaveWorker(save_subdir, php, image_index, save_pid)
+        thread = QThread()
+        worker.moveToThread(thread)
 
-    def _on_save_done2(self):
-        if self.pid_filter_checkbox2.isChecked():
-            pid_filter_add(self._save_pid2, True)
+        # 把回调参数存到 worker 上
+        worker._btn = btn
+        worker._filter_checkbox = filter_checkbox
+        worker._pid_attr = pid_attr
+        worker._img_path = img_path
 
-        self.save_btn2.setEnabled(True)
-        self.save_btn2.setText("✅ 保存")
+        worker.finished.connect(self._on_save_common_done, Qt.QueuedConnection)
+        worker.error.connect(self._on_save_common_error, Qt.QueuedConnection)
+        worker.exists.connect(self._on_save_common_exists, Qt.QueuedConnection)
+        thread.started.connect(worker.run)
+        worker.finished.connect(thread.quit)
+        worker.error.connect(thread.quit)
+        worker.exists.connect(thread.quit)
+
+        # 保持引用防止 GC
+        if not hasattr(self, '_save_threads'):
+            self._save_threads = []
+        self._save_threads.append((worker, thread))
+        thread.start()
+
+    def _update_save_btn_state(self, img_list, cur_idx, btn):
+        """根据当前图片是否在保存中，更新按钮状态"""
+        if img_list and 0 <= cur_idx < len(img_list):
+            cur_path = img_list[cur_idx]
+            if hasattr(self, '_saving_paths') and cur_path in self._saving_paths:
+                btn.setEnabled(False)
+                btn.setText("保存中...")
+                return
+        btn.setEnabled(True)
+        btn.setText("✅ 保存")
+
+    def _on_save_common_done(self):
+        """保存成功通用回调"""
+        worker = self.sender()
+        self._saving_paths.discard(worker._img_path)
+        if worker._filter_checkbox.isChecked():
+            pid_filter_add(getattr(self, worker._pid_attr), True)
+        self._update_btn_by_worker(worker)
         self.show_toast("✅ 保存成功", "success")
 
-    def _on_save_error2(self, msg):
-        self.save_btn2.setEnabled(True)
-        self.save_btn2.setText("✅ 保存")
+    def _on_save_common_error(self, msg):
+        """保存失败通用回调"""
+        worker = self.sender()
+        self._saving_paths.discard(worker._img_path)
+        self._update_btn_by_worker(worker)
         self.show_toast(f"❌ 保存失败: {msg}", "error", 3000)
 
-    def _on_save_exists2(self, name):
-        self.save_btn2.setEnabled(True)
-        self.save_btn2.setText("✅ 保存")
+    def _on_save_common_exists(self, name):
+        """文件已存在通用回调"""
+        worker = self.sender()
+        self._saving_paths.discard(worker._img_path)
+        self._update_btn_by_worker(worker)
         self.show_toast(f"⚠️ 文件已存在: {name}", "warning", 2500)
 
+    def _update_btn_by_worker(self, worker):
+        """根据 worker 对应的 tab 更新保存按钮状态"""
+        if worker._btn is self.save_btn:
+            self._update_save_btn_state(self.image_list_tab1, self.current_index, self.save_btn)
+        elif worker._btn is self.save_btn2:
+            self._update_save_btn_state(self.image_list_tab2, self.current_index2, self.save_btn2)
+        else:
+            self._update_save_btn_state(self.image_list_tab3, self.current_index3, self.save_btn3)
+
+    def on_save_clicked(self):
+        """Tab1 保存"""
+        search_con = self.keywords_input.text().strip()
+        if not search_con:
+            QMessageBox.warning(self, "警告", "请先输入搜索关键词")
+            return
+        self._do_save(
+            os.path.join(save_dir, search_con),
+            self.save_btn, '_save_pid',
+            self.pid_filter_checkbox
+        )
+
+    def on_save_clicked2(self):
+        """Tab2 保存"""
+        self._do_save(
+            os.path.join(save_dir, '纳西妲'),
+            self.save_btn2, '_save_pid2',
+            self.pid_filter_checkbox2
+        )
+
+    def on_save_clicked3(self):
+        """Tab3 保存"""
+        author_subdir = getattr(self, '_author_name', None) or self.author_id_input.text().strip()
+        self._do_save(
+            os.path.join(save_dir, author_subdir),
+            self.save_btn3, '_save_pid3',
+            self.pid_filter_checkbox3
+        )
+
     # ==================== 导航：上一张 / 下一张 ====================
-    def _reset_save_btn(self):
-        """切换图片时恢复保存按钮文字"""
-        self.save_btn.setText("✅ 保存")
-
-    def _reset_save_btn2(self):
-        self.save_btn2.setText("✅ 保存")
-
     def on_prev_clicked(self):
         if not self.image_list_tab1:
             return
         if self.current_index > 0:
             self.current_index -= 1
             self.update_image_display(self.current_index)
-            self._reset_save_btn()
+            self._update_save_btn_state(self.image_list_tab1, self.current_index, self.save_btn)
         else:
             self.show_toast("已经是第一张啦~", "warning", 1500)
 
@@ -2387,7 +2373,7 @@ class PixivFilterApp(QMainWindow):
         if self.current_index < len(self.image_list_tab1) - 1:
             self.current_index += 1
             self.update_image_display(self.current_index)
-            self._reset_save_btn()
+            self._update_save_btn_state(self.image_list_tab1, self.current_index, self.save_btn)
         else:
             self.show_toast("已经是最后一张啦~", "warning", 1500)
 
@@ -2397,7 +2383,7 @@ class PixivFilterApp(QMainWindow):
         if self.current_index2 > 0:
             self.current_index2 -= 1
             self.update_image_display(self.current_index2, self.image_label2)
-            self._reset_save_btn2()
+            self._update_save_btn_state(self.image_list_tab2, self.current_index2, self.save_btn2)
         else:
             self.show_toast("已是第一张", "warning", 1500)
 
@@ -2407,7 +2393,7 @@ class PixivFilterApp(QMainWindow):
         if self.current_index2 < len(self.image_list_tab2) - 1:
             self.current_index2 += 1
             self.update_image_display(self.current_index2, self.image_label2)
-            self._reset_save_btn2()
+            self._update_save_btn_state(self.image_list_tab2, self.current_index2, self.save_btn2)
         else:
             self.show_toast("已是最后一张", "warning", 1500)
 
@@ -2445,18 +2431,26 @@ class PixivFilterApp(QMainWindow):
             (self.search_thread, self.search_worker),
             (self.search_thread2, self.search_worker2),
             (self.search_thread3, self.search_worker3),
-            (self.save_thread, self.save_worker),
-            (self.save_thread2, self.save_worker2),
-            (self.save_thread3, self.save_worker3),
         ]
         
         for thread, worker in threads_to_quit:
             if thread and thread.isRunning():
                 thread.quit()
-                thread.wait(1000)  # 等待最多1秒
+                thread.wait(1000)
                 if thread.isRunning():
-                    thread.terminate()  # 强制终止
+                    thread.terminate()
                     thread.wait()
+
+        # 清理保存线程池
+        if hasattr(self, '_save_threads'):
+            for worker, thread in self._save_threads:
+                if thread and thread.isRunning():
+                    thread.quit()
+                    thread.wait(500)
+                    if thread.isRunning():
+                        thread.terminate()
+                        thread.wait()
+            self._save_threads.clear()
         
         event.accept()
 

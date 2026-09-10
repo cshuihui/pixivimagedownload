@@ -1,6 +1,6 @@
 """
 Pixiv 图片筛选器 - 打包脚本
-使用 PyInstaller 将 test_app.py 打包为独立可执行文件
+使用 PyInstaller 将 main.py 打包为独立可执行文件
 """
 
 import os
@@ -18,7 +18,7 @@ if sys.stdout.encoding != 'utf-8':
 
 # ==================== 配置 ====================
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-ENTRY_POINT = "test_app.py"
+ENTRY_POINT = "main.py"
 APP_NAME = "Pixiv图片筛选器"
 ICON_FILE = "pixiv.ico"
 DIST_DIR = os.path.join(PROJECT_ROOT, "release")

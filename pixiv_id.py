@@ -41,6 +41,7 @@ def id_save(name, page, phpsessid, stop_event=None):
         "Referer": "https://www.pixiv.net/",
     }
     id_list = []
+    session_error = None  # 会话/登录类错误原因（最终抛出真实原因，避免误报“没有找到图片”）
 
     print(f'正在获取第 {page} 页的pid')
     time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
@@ -57,25 +58,39 @@ def id_save(name, page, phpsessid, stop_event=None):
 
             json_data = response.json()  # json()来自requests可以自动将json解析成字典
 
-            if type(json_data['body']) is not dict:  # 似乎到一定页数会输出空列表
+            # Pixiv 返回 error=true：登录状态大概率已失效（PHPSESSID 过期）
+            if json_data.get('error'):
+                msg = json_data.get('message') or '未知错误'
+                session_error = (f"Pixiv 返回错误：{msg} —— PHPSESSID 可能已过期，"
+                                 f"请到「设置」→「PHPSESSID」重新获取或更新")
+                print(session_error)
+                break  # 会话失效为持续状态，无需再重试
+
+            body = json_data.get('body')
+
+            if not isinstance(body, dict):  # 似乎到一定页数会输出空列表
                 print(json_data['body'])
+                break  # 已到末尾 / 无更多结果
 
-            else:
-                for item in json_data['body']['illustManga']["data"]:
-                    id_list.append(item['id'])
+            for item in body['illustManga']["data"]:
+                id_list.append(item['id'])
 
-                print(f'获取完成！共{len(id_list)}个pid.')
-                # print(type(id_list[0]))
-                time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
-                break
+            print(f'获取完成！共{len(id_list)}个pid.')
+            # print(type(id_list[0]))
+            time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
+            break
 
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code
             if status == 401:
-                print("未授权访问（401），请检查 cookie 或 token 是否过期")
+                session_error = ("PHPSESSID 已过期或无效（HTTP 401），"
+                                 "请到「设置」→「PHPSESSID」重新获取或更新")
+                print(session_error)
                 break  # 不建议继续重试，直接跳出
             elif status == 403:
-                print("禁止访问（403），可能是权限问题或被封锁")
+                session_error = ("访问被拒绝（HTTP 403）：可能触发 Pixiv 风控或 Cookie/PHPSESSID 已过期，"
+                                 "请到「设置」重新获取 PHPSESSID（并检查代理/网络）后重试")
+                print(session_error)
                 break
             else:
                 print(f'HTTP错误：{status}, 信息: {e}')
@@ -91,6 +106,10 @@ def id_save(name, page, phpsessid, stop_event=None):
         print(f"正在尝试重连..({times}/{MaxTryTimes})")
 
     random.shuffle(id_list)  # 打乱列表元素顺序
+
+    # 一个 PID 都没取到且明确是会话/登录错误 → 抛出真实原因，而不是静默返回空列表
+    if not id_list and session_error:
+        raise RuntimeError(session_error)
     return id_list
 
 def user_works_id(user_id, php):
@@ -133,17 +152,29 @@ def user_works_id(user_id, php):
                 '-lOci6hh5jjnmGdeeUDtZ83WndbyRZtywdaDKC695p7NeoN_PwldsmZy5jHzQvixJ3AL0Qh6'
                 '-LDChj5UOmnQED8Uabak_FUQVkPUhfScRtxhYTmUlYI-w%3D%3D%22%5D%5D',
     }
-    result = requests.get(
+    resp = requests.get(
         url=api,
         headers=headers,
-        cookies=cookies
+        cookies=cookies,
+        timeout=(10, 30)
     )
-    result = result.json()
+    # 会话失效/访问被拒时先给出明确原因
+    if resp.status_code in (401, 403):
+        reason = "PHPSESSID 已过期或无效" if resp.status_code == 401 else "访问被拒绝/触发 Pixiv 风控"
+        raise RuntimeError(f"{reason}（HTTP {resp.status_code}），请到「设置」→「PHPSESSID」重新获取或更新后重试")
+    if resp.status_code != 200:
+        raise RuntimeError(f"获取作者作品失败：HTTP {resp.status_code}")
+
+    try:
+        result = resp.json()
+    except ValueError:
+        raise RuntimeError("获取作者作品返回内容异常（可能登录状态失效/PHPSESSID 过期），请到「设置」更新后重试")
     # print(result)
     
     # 检查 API 返回是否正常
     if result.get('error'):
-        raise Exception(f"API 返回错误: {result.get('message', '未知错误')}")
+        msg = result.get('message', '未知错误')
+        raise RuntimeError(f"API 返回错误：{msg}（PHPSESSID 可能已过期），请到「设置」→「PHPSESSID」重新获取或更新")
     
     body = result.get('body')
     if not body or not isinstance(body, dict):

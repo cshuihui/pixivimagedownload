@@ -1,5 +1,4 @@
 {
-  "default_image_tab1": "D:\\py_product\\pixiv_download\\theme/default_image\\1.jpg",
-  "default_image_tab2": "D:\\py_product\\pixiv_download\\theme\\default_image\\1.jpg",
-  "default_image_tab3": "D:\\py_product\\pixiv_download\\theme/default_image\\1.jpg"
+  "background_image": "D:\\py_product\\pixiv_download\\theme\\default_image\\1.jpg",
+  "ui_transparency": 10
 }

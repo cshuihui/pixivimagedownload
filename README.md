@@ -17,7 +17,17 @@
 ## 项目结构
 
 ```
-├── test_app.py              # 主程序 — PySide6 桌面 GUI
+├── main.py                  # 主程序入口 — PySide6 桌面 GUI
+├── ui/                      # 界面层
+│   └── main_window.py       # PixivFilterApp 主窗口（布局 + 事件/信号槽）
+├── workers/                 # 后台任务（QObject + QThread）
+│   ├── search_worker.py     # 关键词 / 作者搜索与下载
+│   ├── save_worker.py       # 保存原图
+│   └── php_worker.py        # PHPSESSID 获取 / 检测
+├── logic/                   # 业务逻辑与配置
+│   ├── image_logic.py       # 图片 / 文件名逻辑 + PID 黑名单
+│   └── config_logic.py      # 路径、启动初始化、config.json 读写
+├── test_app.py              # 旧版单文件 GUI（保留作对照）
 ├── app.py                   # 备用 — Gradio Web UI
 ├── build.py                 # 打包脚本 (PyInstaller)
 ├── Pixiv图片筛选器.spec     # PyInstaller 打包配置
@@ -66,7 +76,7 @@ python get_phpsessid.py
 **桌面 GUI（推荐）：**
 
 ```bash
-python test_app.py
+python main.py
 ```
 
 **Web UI（备用）：**

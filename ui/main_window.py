@@ -12,6 +12,7 @@ ui/main_window.py — PixivFilterApp 主窗口
 """
 
 import os
+import shutil
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QLabel, QMessageBox, QFileDialog
@@ -94,6 +95,11 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         # .ui 无法表达的细节：文件名叠加层不拦截鼠标；图片区左/右 = 5:1
         for lbl in (self.filename_label, self.filename_label2, self.filename_label3):
             lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
+        # 侧边栏 tab 文字加粗
+        for btn in (self.tab_btn1, self.tab_btn2, self.tab_btn3, self.tab_btn4):
+            f = btn.font()
+            f.setBold(True)
+            btn.setFont(f)
         for layout in (self.content_layout1, self.content_layout2, self.content_layout3):
             layout.setStretch(0, 5)
             layout.setStretch(1, 1)
@@ -173,6 +179,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.delete_bg_image_btn.clicked.connect(self._on_bg_delete)
         self.browse_bg_image_btn.clicked.connect(self._on_browse_bg_image)
         self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
+        self.clear_cache_btn.clicked.connect(self._on_clear_cache)
 
         # 初始 R18 互斥状态
         self._update_r18_state(1)
@@ -197,6 +204,8 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.opacity_value_label.setText(f"{self.ui_transparency}%")
         # 应用背景图 + 子控件透明度
         self._apply_appearance()
+        # 缓存大小
+        self._update_cache_size()
 
     def _update_r18_state(self, tab):
         """R18 / R18G / 仅R18 三者互斥（按 tab 处理）"""
@@ -226,7 +235,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
 
     # ==================== 配置读写 ====================
     def _load_ui_config(self):
-        """从 config/config.json 加载背景图与子控件透明度"""
+        """从 config/config.json 加载背景图、子控件透明度、PHPSESSID"""
         cfg = config_logic.load_ui_config()
         bg = cfg.get('background_image') or ''
         if bg and not os.path.exists(bg):
@@ -237,10 +246,13 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         except (TypeError, ValueError):
             v = 0
         self.ui_transparency = max(0, min(100, v))
+        self.phpsessid = cfg.get('phpsessid') or ''
 
     def _save_ui_config(self):
-        """保存背景图与子控件透明度到 config/config.json"""
-        config_logic.save_ui_config(self.background_image, self.ui_transparency)
+        """保存背景图、子控件透明度、PHPSESSID 到 config/config.json"""
+        config_logic.save_ui_config(
+            self.background_image, self.ui_transparency, getattr(self, 'phpsessid', '') or ''
+        )
 
     def eventFilter(self, obj, event):
         # 滚轮缩放
@@ -364,10 +376,10 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
 
         php = self.php_input_global.text().strip()
         if success:
-            with open(config_logic.phpsessid_file, 'w') as f:
-                f.write(php)
+            self.phpsessid = php
+            self._save_ui_config()
             self.get_php_btn.setEnabled(False)
-            self.php_status_label.setText("✅ 已保存到 phpsessid.txt")
+            self.php_status_label.setText("✅ 已保存到 config.json")
         else:
             self.get_php_btn.setEnabled(True)
 
@@ -577,7 +589,6 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         )
         if not file_path:
             return
-        import shutil
         fname = os.path.basename(file_path)
         dest_path = os.path.normpath(os.path.join(added_dir, fname))
         same = (os.path.normcase(os.path.abspath(file_path))
@@ -602,6 +613,43 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.opacity_value_label.setText(f"{value}%")
         self._save_ui_config()
         self._apply_appearance()
+
+    def _cache_size_bytes(self):
+        """temp 目录占用的字节数"""
+        total = 0
+        if os.path.isdir(config_logic.temp_dir):
+            for root, _dirs, files in os.walk(config_logic.temp_dir):
+                for name in files:
+                    try:
+                        total += os.path.getsize(os.path.join(root, name))
+                    except OSError:
+                        pass
+        return total
+
+    @staticmethod
+    def _human_size(num):
+        """字节数转为易读字符串"""
+        size = float(num)
+        for unit in ('B', 'KB', 'MB', 'GB'):
+            if size < 1024 or unit == 'GB':
+                return f"{int(size)} {unit}" if unit == 'B' else f"{size:.1f} {unit}"
+            size /= 1024.0
+
+    def _update_cache_size(self):
+        """刷新缓存大小显示"""
+        self.cache_size_label.setText(self._human_size(self._cache_size_bytes()))
+
+    def _on_clear_cache(self):
+        """清理 temp 缓存目录"""
+        try:
+            if os.path.isdir(config_logic.temp_dir):
+                shutil.rmtree(config_logic.temp_dir)
+            os.makedirs(config_logic.temp_dir, exist_ok=True)
+        except Exception as e:
+            QMessageBox.warning(self, "清理失败", f"无法清理缓存：{e}")
+            return
+        self._update_cache_size()
+        self.show_toast("🧹 缓存已清理", "success", 1500)
 
     def _ensure_bg_label(self):
         """背景图用一个铺底 QLabel 绘制（保持在所有子控件下方）"""
@@ -912,6 +960,10 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.tab_btn2.setStyleSheet(active if index == 1 else inactive)
         self.tab_btn3.setStyleSheet(active if index == 2 else inactive)
         self.tab_btn4.setStyleSheet(active if index == 3 else inactive)
+
+        # 进入设置页时刷新缓存大小
+        if index == 3:
+            self._update_cache_size()
 
         # 切换到对应的 tab 时重新自适应展示
         if index == 0 and self._pixmap1 is None:

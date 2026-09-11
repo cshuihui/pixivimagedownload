@@ -10,7 +10,6 @@ workers/search_worker.py — 关键词/作者搜索并下载预览图的后台�
 """
 
 import os
-import shutil
 import time
 import random
 import threading
@@ -75,8 +74,6 @@ class SearchWorker(QObject):
     @Slot()
     def run(self):
         try:
-            if os.path.exists(config_logic.temp_dir):
-                shutil.rmtree(config_logic.temp_dir)
             os.makedirs(config_logic.temp_dir, exist_ok=True)
 
             sub_dir = os.path.join(config_logic.temp_dir, self.content)
@@ -221,8 +218,6 @@ class AuthorSearchWorker(QObject):
     @Slot()
     def run(self):
         try:
-            if os.path.exists(config_logic.temp_dir):
-                shutil.rmtree(config_logic.temp_dir)
             os.makedirs(config_logic.temp_dir, exist_ok=True)
 
             result = []

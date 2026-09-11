@@ -809,6 +809,32 @@ class Ui_MainWindow(object):
 
         self.tab4_layout.addWidget(self.bg_group)
 
+        self.cache_group = QGroupBox(self.tab4)
+        self.cache_group.setObjectName(u"cache_group")
+        self.cache_layout = QHBoxLayout(self.cache_group)
+        self.cache_layout.setObjectName(u"cache_layout")
+        self.label_cache = QLabel(self.cache_group)
+        self.label_cache.setObjectName(u"label_cache")
+
+        self.cache_layout.addWidget(self.label_cache)
+
+        self.cache_size_label = QLabel(self.cache_group)
+        self.cache_size_label.setObjectName(u"cache_size_label")
+
+        self.cache_layout.addWidget(self.cache_size_label)
+
+        self.cache_spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.cache_layout.addItem(self.cache_spacer)
+
+        self.clear_cache_btn = QPushButton(self.cache_group)
+        self.clear_cache_btn.setObjectName(u"clear_cache_btn")
+
+        self.cache_layout.addWidget(self.clear_cache_btn)
+
+
+        self.tab4_layout.addWidget(self.cache_group)
+
         self.tab4_spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.tab4_layout.addItem(self.tab4_spacer)
@@ -826,10 +852,10 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Pixiv \u56fe\u7247\u7b5b\u9009\u5668", None))
-        self.tab_btn1.setText(QCoreApplication.translate("MainWindow", u"  \u2630  \u7b5b\u9009\u5668", None))
-        self.tab_btn2.setText(QCoreApplication.translate("MainWindow", u"  \u2606  \u7eb3\u897f\u59b2", None))
-        self.tab_btn3.setText(QCoreApplication.translate("MainWindow", u"  \U0001f464  \U00004f5c\U00008005\U00004f5c\U000054c1", None))
-        self.tab_btn4.setText(QCoreApplication.translate("MainWindow", u"  \u2699  \u8bbe\u7f6e", None))
+        self.tab_btn1.setText(QCoreApplication.translate("MainWindow", u"\u7b5b\u9009\u5668", None))
+        self.tab_btn2.setText(QCoreApplication.translate("MainWindow", u"\u7eb3\u897f\u59b2", None))
+        self.tab_btn3.setText(QCoreApplication.translate("MainWindow", u"\u4f5c\u8005\u4f5c\u54c1", None))
+        self.tab_btn4.setText(QCoreApplication.translate("MainWindow", u"\u8bbe\u7f6e", None))
         self.search_group1.setTitle("")
         self.label_keywords.setText(QCoreApplication.translate("MainWindow", u"\u641c\u7d22\u5173\u952e\u8bcd:", None))
         self.label_filter.setText(QCoreApplication.translate("MainWindow", u"\u5185\u5bb9\u8fc7\u6ee4:", None))
@@ -915,5 +941,9 @@ class Ui_MainWindow(object):
         self.label_opacity.setText(QCoreApplication.translate("MainWindow", u"\u5b50\u63a7\u4ef6\u900f\u660e\u5ea6:", None))
         self.opacity_value_label.setText(QCoreApplication.translate("MainWindow", u"0%", None))
         self.bg_status_label.setText("")
+        self.cache_group.setTitle("")
+        self.label_cache.setText(QCoreApplication.translate("MainWindow", u"\u7f13\u5b58\u5927\u5c0f:", None))
+        self.cache_size_label.setText(QCoreApplication.translate("MainWindow", u"0 B", None))
+        self.clear_cache_btn.setText(QCoreApplication.translate("MainWindow", u"\u6e05\u7406\u7f13\u5b58", None))
     # retranslateUi
 

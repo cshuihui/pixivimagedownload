@@ -83,7 +83,7 @@
 QPushButton:hover { background: rgba(0, 0, 0, 60); }</string>
          </property>
          <property name="text">
-          <string>  ☰  筛选器</string>
+          <string>筛选器</string>
          </property>
         </widget>
        </item>
@@ -107,7 +107,7 @@ QPushButton:hover { background: rgba(0, 0, 0, 60); }</string>
 QPushButton:hover { background: rgba(0, 0, 0, 30); }</string>
          </property>
          <property name="text">
-          <string>  ☆  纳西妲</string>
+          <string>纳西妲</string>
          </property>
         </widget>
        </item>
@@ -131,7 +131,7 @@ QPushButton:hover { background: rgba(0, 0, 0, 30); }</string>
 QPushButton:hover { background: rgba(0, 0, 0, 30); }</string>
          </property>
          <property name="text">
-          <string>  👤  作者作品</string>
+          <string>作者作品</string>
          </property>
         </widget>
        </item>
@@ -155,7 +155,7 @@ QPushButton:hover { background: rgba(0, 0, 0, 30); }</string>
 QPushButton:hover { background: rgba(0, 0, 0, 30); }</string>
          </property>
          <property name="text">
-          <string>  ⚙  设置</string>
+          <string>设置</string>
          </property>
         </widget>
        </item>
@@ -1264,6 +1264,49 @@ font-size: 12px;</string>
              </property>
              <property name="text">
               <string/>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="cache_group">
+          <property name="title">
+           <string/>
+          </property>
+          <layout class="QHBoxLayout" name="cache_layout">
+           <item>
+            <widget class="QLabel" name="label_cache">
+             <property name="text">
+              <string>缓存大小:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="cache_size_label">
+             <property name="text">
+              <string>0 B</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="cache_spacer">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QPushButton" name="clear_cache_btn">
+             <property name="text">
+              <string>清理缓存</string>
              </property>
             </widget>
            </item>

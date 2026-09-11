@@ -44,7 +44,7 @@
 ├── models/                  # 预训练模型文件 (.pth / .onnx)
 ├── datasets/pic_datasets/   # 训练数据集 (0/1 二分类)
 ├── requirements.txt         # torch_cpu Python 依赖
-├── phpsessid.txt            # Pixiv 登录凭证 (需自行填写)
+├── config/config.json       # 设置：背景图 / 透明度 / PHPSESSID
 └── pids_filter.txt          # PID 黑名单
 ```
 
@@ -63,13 +63,10 @@ pip install -r requirements.txt
 
 ### 3. 配置 PHPSESSID
 
-在 `phpsessid.txt` 中写入你的 Pixiv PHPSESSID，或运行自动获取脚本：
+打开程序「设置 → PHPSESSID」：粘贴后点「检测」，通过会写入 `config/config.json`；
+或点「获取」自动打开 Edge 跳转 Pixiv 登录页，登录后自动提取。
 
-```bash
-python get_phpsessid.py
-```
-
-> 自动获取会打开 Edge 浏览器跳转到 Pixiv 登录页，登录后自动提取 Cookie。
+> 不再使用 `phpsessid.txt`（旧文件可自行删除）。
 
 ### 4. 运行
 

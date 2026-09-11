@@ -35,14 +35,17 @@ def data_path(relative_path):
 
 
 def _find_default_image():
-    """从 theme/default_image/ 查找第一张可用图片作为默认"""
+    """从 theme/default_image/ 查找默认背景图（优先「1」号预设，否则取排序后的第一张）"""
     exts = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
     for base in [resource_path('theme/default_image'),
                  os.path.join(os.path.abspath("."), 'theme', 'default_image')]:
         if os.path.isdir(base):
-            for f in sorted(os.listdir(base)):
-                if f.lower().endswith(exts):
+            files = sorted(f for f in os.listdir(base) if f.lower().endswith(exts))
+            for f in files:
+                if os.path.splitext(f)[0] == '1':
                     return os.path.join(base, f)
+            if files:
+                return os.path.join(base, files[0])
     return resource_path('143035291_p0.jpg')
 
 

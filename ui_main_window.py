@@ -28,26 +28,98 @@ class Ui_MainWindow(object):
         MainWindow.resize(1200, 750)
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
-        self.main_layout = QHBoxLayout(self.centralwidget)
+        self.main_layout = QVBoxLayout(self.centralwidget)
         self.main_layout.setSpacing(0)
         self.main_layout.setObjectName(u"main_layout")
         self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.sidebar = QWidget(self.centralwidget)
+        self.titlebar = QWidget(self.centralwidget)
+        self.titlebar.setObjectName(u"titlebar")
+        self.titlebar.setMinimumSize(QSize(0, 38))
+        self.titlebar.setMaximumSize(QSize(16777215, 38))
+        self.titlebar.setStyleSheet(u"#titlebar { background-color: rgba(240, 240, 240, 235); border-bottom: 1px solid rgba(120, 120, 120, 110); }")
+        self.titlebar_layout = QHBoxLayout(self.titlebar)
+        self.titlebar_layout.setSpacing(0)
+        self.titlebar_layout.setObjectName(u"titlebar_layout")
+        self.titlebar_layout.setContentsMargins(10, 0, 0, 0)
+        self.app_icon = QLabel(self.titlebar)
+        self.app_icon.setObjectName(u"app_icon")
+        self.app_icon.setMinimumSize(QSize(22, 22))
+        self.app_icon.setMaximumSize(QSize(22, 22))
+        self.app_icon.setStyleSheet(u"background: transparent;")
+        self.app_icon.setScaledContents(True)
+
+        self.titlebar_layout.addWidget(self.app_icon)
+
+        self.app_title = QLabel(self.titlebar)
+        self.app_title.setObjectName(u"app_title")
+        self.app_title.setStyleSheet(u"background: transparent; color: #333333; font-size: 13px; padding-left: 6px;")
+
+        self.titlebar_layout.addWidget(self.app_title)
+
+        self.titlebar_spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.titlebar_layout.addItem(self.titlebar_spacer)
+
+        self.min_btn = QPushButton(self.titlebar)
+        self.min_btn.setObjectName(u"min_btn")
+        self.min_btn.setMinimumSize(QSize(45, 38))
+        self.min_btn.setMaximumSize(QSize(45, 38))
+        self.min_btn.setStyleSheet(u"QPushButton { border: none; background: transparent; color: #444444; font-size: 15px; }\n"
+"QPushButton:hover { background: rgba(0, 0, 0, 35); color: #000000; }\n"
+"QPushButton:pressed { background: rgba(0, 0, 0, 60); }")
+
+        self.titlebar_layout.addWidget(self.min_btn)
+
+        self.max_btn = QPushButton(self.titlebar)
+        self.max_btn.setObjectName(u"max_btn")
+        self.max_btn.setMinimumSize(QSize(45, 38))
+        self.max_btn.setMaximumSize(QSize(45, 38))
+        self.max_btn.setStyleSheet(u"QPushButton { border: none; background: transparent; color: #444444; font-size: 13px; }\n"
+"QPushButton:hover { background: rgba(0, 0, 0, 35); color: #000000; }\n"
+"QPushButton:pressed { background: rgba(0, 0, 0, 60); }")
+
+        self.titlebar_layout.addWidget(self.max_btn)
+
+        self.close_btn = QPushButton(self.titlebar)
+        self.close_btn.setObjectName(u"close_btn")
+        self.close_btn.setMinimumSize(QSize(45, 38))
+        self.close_btn.setMaximumSize(QSize(45, 38))
+        self.close_btn.setStyleSheet(u"QPushButton { border: none; background: transparent; color: #444444; font-size: 14px; }\n"
+"QPushButton:hover { background: #E81123; color: #ffffff; }\n"
+"QPushButton:pressed { background: #C10B1B; color: #ffffff; }")
+
+        self.titlebar_layout.addWidget(self.close_btn)
+
+
+        self.main_layout.addWidget(self.titlebar)
+
+        self.body = QWidget(self.centralwidget)
+        self.body.setObjectName(u"body")
+        sizePolicy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.body.sizePolicy().hasHeightForWidth())
+        self.body.setSizePolicy(sizePolicy)
+        self.body_layout = QHBoxLayout(self.body)
+        self.body_layout.setSpacing(0)
+        self.body_layout.setObjectName(u"body_layout")
+        self.body_layout.setContentsMargins(0, 0, 0, 0)
+        self.sidebar = QWidget(self.body)
         self.sidebar.setObjectName(u"sidebar")
         self.sidebar.setMinimumSize(QSize(130, 0))
         self.sidebar.setMaximumSize(QSize(130, 16777215))
         self.sidebar.setStyleSheet(u"background-color: rgba(255, 255, 255, 180);")
         self.sidebar_layout = QVBoxLayout(self.sidebar)
-        self.sidebar_layout.setSpacing(0)
+        self.sidebar_layout.setSpacing(8)
         self.sidebar_layout.setObjectName(u"sidebar_layout")
-        self.sidebar_layout.setContentsMargins(0, 10, 0, 10)
+        self.sidebar_layout.setContentsMargins(8, 10, 8, 10)
         self.tab_btn1 = QPushButton(self.sidebar)
         self.tab_btn1.setObjectName(u"tab_btn1")
         self.tab_btn1.setMinimumSize(QSize(0, 45))
         self.tab_btn1.setMaximumSize(QSize(16777215, 45))
-        self.tab_btn1.setStyleSheet(u"QPushButton { text-align: left; padding: 8px 15px; border: none;\n"
-"              color: #222; font-size: 13px; background: rgba(0, 0, 0, 40); }\n"
-"QPushButton:hover { background: rgba(0, 0, 0, 60); }")
+        self.tab_btn1.setStyleSheet(u"QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;\n"
+"              color: #222; font-size: 13px; background: rgba(0, 0, 0, 60); }\n"
+"QPushButton:hover { background: rgba(0, 0, 0, 80); }")
 
         self.sidebar_layout.addWidget(self.tab_btn1)
 
@@ -55,9 +127,9 @@ class Ui_MainWindow(object):
         self.tab_btn2.setObjectName(u"tab_btn2")
         self.tab_btn2.setMinimumSize(QSize(0, 45))
         self.tab_btn2.setMaximumSize(QSize(16777215, 45))
-        self.tab_btn2.setStyleSheet(u"QPushButton { text-align: left; padding: 8px 15px; border: none;\n"
-"              color: #444; font-size: 13px; background: transparent; }\n"
-"QPushButton:hover { background: rgba(0, 0, 0, 30); }")
+        self.tab_btn2.setStyleSheet(u"QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;\n"
+"              color: #444; font-size: 13px; background: rgba(0, 0, 0, 25); }\n"
+"QPushButton:hover { background: rgba(0, 0, 0, 45); }")
 
         self.sidebar_layout.addWidget(self.tab_btn2)
 
@@ -65,9 +137,9 @@ class Ui_MainWindow(object):
         self.tab_btn3.setObjectName(u"tab_btn3")
         self.tab_btn3.setMinimumSize(QSize(0, 45))
         self.tab_btn3.setMaximumSize(QSize(16777215, 45))
-        self.tab_btn3.setStyleSheet(u"QPushButton { text-align: left; padding: 8px 15px; border: none;\n"
-"              color: #444; font-size: 13px; background: transparent; }\n"
-"QPushButton:hover { background: rgba(0, 0, 0, 30); }")
+        self.tab_btn3.setStyleSheet(u"QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;\n"
+"              color: #444; font-size: 13px; background: rgba(0, 0, 0, 25); }\n"
+"QPushButton:hover { background: rgba(0, 0, 0, 45); }")
 
         self.sidebar_layout.addWidget(self.tab_btn3)
 
@@ -75,9 +147,9 @@ class Ui_MainWindow(object):
         self.tab_btn4.setObjectName(u"tab_btn4")
         self.tab_btn4.setMinimumSize(QSize(0, 45))
         self.tab_btn4.setMaximumSize(QSize(16777215, 45))
-        self.tab_btn4.setStyleSheet(u"QPushButton { text-align: left; padding: 8px 15px; border: none;\n"
-"              color: #444; font-size: 13px; background: transparent; }\n"
-"QPushButton:hover { background: rgba(0, 0, 0, 30); }")
+        self.tab_btn4.setStyleSheet(u"QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;\n"
+"              color: #444; font-size: 13px; background: rgba(0, 0, 0, 25); }\n"
+"QPushButton:hover { background: rgba(0, 0, 0, 45); }")
 
         self.sidebar_layout.addWidget(self.tab_btn4)
 
@@ -86,9 +158,9 @@ class Ui_MainWindow(object):
         self.sidebar_layout.addItem(self.sidebar_spacer)
 
 
-        self.main_layout.addWidget(self.sidebar)
+        self.body_layout.addWidget(self.sidebar)
 
-        self.stack = QStackedWidget(self.centralwidget)
+        self.stack = QStackedWidget(self.body)
         self.stack.setObjectName(u"stack")
         self.tab1 = QWidget()
         self.tab1.setObjectName(u"tab1")
@@ -785,7 +857,7 @@ class Ui_MainWindow(object):
         self.opacity_slider.setObjectName(u"opacity_slider")
         self.opacity_slider.setMinimum(0)
         self.opacity_slider.setMaximum(100)
-        self.opacity_slider.setValue(0)
+        self.opacity_slider.setValue(20)
         self.opacity_slider.setOrientation(Qt.Horizontal)
 
         self.opacity_row.addWidget(self.opacity_slider)
@@ -841,7 +913,10 @@ class Ui_MainWindow(object):
 
         self.stack.addWidget(self.tab4)
 
-        self.main_layout.addWidget(self.stack)
+        self.body_layout.addWidget(self.stack)
+
+
+        self.main_layout.addWidget(self.body)
 
         MainWindow.setCentralWidget(self.centralwidget)
 
@@ -852,6 +927,20 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Pixiv \u56fe\u7247\u7b5b\u9009\u5668", None))
+        self.app_icon.setText("")
+        self.app_title.setText(QCoreApplication.translate("MainWindow", u"Pixiv \u56fe\u7247\u7b5b\u9009\u5668", None))
+        self.min_btn.setText(QCoreApplication.translate("MainWindow", u"\u2212", None))
+#if QT_CONFIG(tooltip)
+        self.min_btn.setToolTip(QCoreApplication.translate("MainWindow", u"\u6700\u5c0f\u5316", None))
+#endif // QT_CONFIG(tooltip)
+        self.max_btn.setText(QCoreApplication.translate("MainWindow", u"\u25a1", None))
+#if QT_CONFIG(tooltip)
+        self.max_btn.setToolTip(QCoreApplication.translate("MainWindow", u"\u6700\u5927\u5316", None))
+#endif // QT_CONFIG(tooltip)
+        self.close_btn.setText(QCoreApplication.translate("MainWindow", u"\u2715", None))
+#if QT_CONFIG(tooltip)
+        self.close_btn.setToolTip(QCoreApplication.translate("MainWindow", u"\u5173\u95ed", None))
+#endif // QT_CONFIG(tooltip)
         self.tab_btn1.setText(QCoreApplication.translate("MainWindow", u"\u7b5b\u9009\u5668", None))
         self.tab_btn2.setText(QCoreApplication.translate("MainWindow", u"\u7eb3\u897f\u59b2", None))
         self.tab_btn3.setText(QCoreApplication.translate("MainWindow", u"\u4f5c\u8005\u4f5c\u54c1", None))
@@ -939,7 +1028,7 @@ class Ui_MainWindow(object):
         self.delete_bg_image_btn.setText(QCoreApplication.translate("MainWindow", u"\u5220\u9664", None))
         self.browse_bg_image_btn.setText(QCoreApplication.translate("MainWindow", u"\u6dfb\u52a0", None))
         self.label_opacity.setText(QCoreApplication.translate("MainWindow", u"\u5b50\u63a7\u4ef6\u900f\u660e\u5ea6:", None))
-        self.opacity_value_label.setText(QCoreApplication.translate("MainWindow", u"0%", None))
+        self.opacity_value_label.setText(QCoreApplication.translate("MainWindow", u"20%", None))
         self.bg_status_label.setText("")
         self.cache_group.setTitle("")
         self.label_cache.setText(QCoreApplication.translate("MainWindow", u"\u7f13\u5b58\u5927\u5c0f:", None))

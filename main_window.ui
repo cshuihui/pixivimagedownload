@@ -14,7 +14,7 @@
    <string>Pixiv 图片筛选器</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QHBoxLayout" name="main_layout">
+   <layout class="QVBoxLayout" name="main_layout">
     <property name="spacing">
      <number>0</number>
     </property>
@@ -31,7 +31,196 @@
      <number>0</number>
     </property>
     <item>
-     <widget class="QWidget" name="sidebar" native="true">
+     <widget class="QWidget" name="titlebar" native="true">
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>38</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>38</height>
+       </size>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">#titlebar { background-color: rgba(240, 240, 240, 235); border-bottom: 1px solid rgba(120, 120, 120, 110); }</string>
+      </property>
+      <layout class="QHBoxLayout" name="titlebar_layout">
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <property name="leftMargin">
+        <number>10</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="app_icon">
+         <property name="minimumSize">
+          <size>
+           <width>22</width>
+           <height>22</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>22</width>
+           <height>22</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background: transparent;</string>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="scaledContents">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="app_title">
+         <property name="styleSheet">
+          <string notr="true">background: transparent; color: #333333; font-size: 13px; padding-left: 6px;</string>
+         </property>
+         <property name="text">
+          <string>Pixiv 图片筛选器</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="titlebar_spacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QPushButton" name="min_btn">
+         <property name="minimumSize">
+          <size>
+           <width>45</width>
+           <height>38</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>45</width>
+           <height>38</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QPushButton { border: none; background: transparent; color: #444444; font-size: 15px; }
+QPushButton:hover { background: rgba(0, 0, 0, 35); color: #000000; }
+QPushButton:pressed { background: rgba(0, 0, 0, 60); }</string>
+         </property>
+         <property name="text">
+          <string>−</string>
+         </property>
+         <property name="toolTip">
+          <string>最小化</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="max_btn">
+         <property name="minimumSize">
+          <size>
+           <width>45</width>
+           <height>38</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>45</width>
+           <height>38</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QPushButton { border: none; background: transparent; color: #444444; font-size: 13px; }
+QPushButton:hover { background: rgba(0, 0, 0, 35); color: #000000; }
+QPushButton:pressed { background: rgba(0, 0, 0, 60); }</string>
+         </property>
+         <property name="text">
+          <string>□</string>
+         </property>
+         <property name="toolTip">
+          <string>最大化</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="close_btn">
+         <property name="minimumSize">
+          <size>
+           <width>45</width>
+           <height>38</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>45</width>
+           <height>38</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QPushButton { border: none; background: transparent; color: #444444; font-size: 14px; }
+QPushButton:hover { background: #E81123; color: #ffffff; }
+QPushButton:pressed { background: #C10B1B; color: #ffffff; }</string>
+         </property>
+         <property name="text">
+          <string>✕</string>
+         </property>
+         <property name="toolTip">
+          <string>关闭</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QWidget" name="body" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <layout class="QHBoxLayout" name="body_layout">
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QWidget" name="sidebar" native="true">
       <property name="minimumSize">
        <size>
         <width>130</width>
@@ -49,16 +238,16 @@
       </property>
       <layout class="QVBoxLayout" name="sidebar_layout">
        <property name="spacing">
-        <number>0</number>
+        <number>8</number>
        </property>
        <property name="leftMargin">
-        <number>0</number>
+        <number>8</number>
        </property>
        <property name="topMargin">
         <number>10</number>
        </property>
        <property name="rightMargin">
-        <number>0</number>
+        <number>8</number>
        </property>
        <property name="bottomMargin">
         <number>10</number>
@@ -78,9 +267,9 @@
           </size>
          </property>
          <property name="styleSheet">
-          <string notr="true">QPushButton { text-align: left; padding: 8px 15px; border: none;
-              color: #222; font-size: 13px; background: rgba(0, 0, 0, 40); }
-QPushButton:hover { background: rgba(0, 0, 0, 60); }</string>
+          <string notr="true">QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;
+              color: #222; font-size: 13px; background: rgba(0, 0, 0, 60); }
+QPushButton:hover { background: rgba(0, 0, 0, 80); }</string>
          </property>
          <property name="text">
           <string>筛选器</string>
@@ -102,9 +291,9 @@ QPushButton:hover { background: rgba(0, 0, 0, 60); }</string>
           </size>
          </property>
          <property name="styleSheet">
-          <string notr="true">QPushButton { text-align: left; padding: 8px 15px; border: none;
-              color: #444; font-size: 13px; background: transparent; }
-QPushButton:hover { background: rgba(0, 0, 0, 30); }</string>
+          <string notr="true">QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;
+              color: #444; font-size: 13px; background: rgba(0, 0, 0, 25); }
+QPushButton:hover { background: rgba(0, 0, 0, 45); }</string>
          </property>
          <property name="text">
           <string>纳西妲</string>
@@ -126,9 +315,9 @@ QPushButton:hover { background: rgba(0, 0, 0, 30); }</string>
           </size>
          </property>
          <property name="styleSheet">
-          <string notr="true">QPushButton { text-align: left; padding: 8px 15px; border: none;
-              color: #444; font-size: 13px; background: transparent; }
-QPushButton:hover { background: rgba(0, 0, 0, 30); }</string>
+          <string notr="true">QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;
+              color: #444; font-size: 13px; background: rgba(0, 0, 0, 25); }
+QPushButton:hover { background: rgba(0, 0, 0, 45); }</string>
          </property>
          <property name="text">
           <string>作者作品</string>
@@ -150,9 +339,9 @@ QPushButton:hover { background: rgba(0, 0, 0, 30); }</string>
           </size>
          </property>
          <property name="styleSheet">
-          <string notr="true">QPushButton { text-align: left; padding: 8px 15px; border: none;
-              color: #444; font-size: 13px; background: transparent; }
-QPushButton:hover { background: rgba(0, 0, 0, 30); }</string>
+          <string notr="true">QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;
+              color: #444; font-size: 13px; background: rgba(0, 0, 0, 25); }
+QPushButton:hover { background: rgba(0, 0, 0, 45); }</string>
          </property>
          <property name="text">
           <string>设置</string>
@@ -1232,7 +1421,7 @@ font-size: 12px;</string>
                 <number>100</number>
                </property>
                <property name="value">
-                <number>0</number>
+                <number>20</number>
                </property>
                <property name="orientation">
                 <enum>Qt::Horizontal</enum>
@@ -1248,7 +1437,7 @@ font-size: 12px;</string>
                 </size>
                </property>
                <property name="text">
-                <string>0%</string>
+                <string>20%</string>
                </property>
                <property name="alignment">
                 <set>Qt::AlignRight|Qt::AlignVCenter</set>
@@ -1328,6 +1517,9 @@ font-size: 12px;</string>
         </item>
        </layout>
       </widget>
+     </widget>
+    </item>
+     </layout>
      </widget>
     </item>
    </layout>

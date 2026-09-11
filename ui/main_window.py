@@ -39,6 +39,17 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         # 界面完全来自 main_window.ui（pyside6-uic 生成）
         self.setupUi(self)
         self._set_app_icon()
+        # 无边框窗口：页眉改由 main_window.ui 里的自定义 titlebar 承担
+        # （左侧 app_icon + app_title，右侧 min_btn / max_btn / close_btn）
+        self.setWindowFlags(
+            Qt.WindowType.Window
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowSystemMenuHint   # 保留系统菜单 → Alt+F4 可关闭
+        )
+        self.setMouseTracking(True)
+        # 自定义最大化状态（无边框窗口自行管理，铺满屏幕工作区）
+        self._maximized_custom = False
+        self._normal_geometry = None
         self.move(100, 100)
 
         self.current_index = 0
@@ -74,9 +85,9 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.image_list_tab2 = []
         self.image_list_tab3 = []
 
-        # 背景图 / 子控件透明度（可选；默认无背景图、透明度 0 = 不透明）
-        self.background_image = ''
-        self.ui_transparency = 0
+        # 背景图 / 子控件透明度（默认预设 1 背景图、透明度 20）
+        self.background_image = config_logic.default_image
+        self.ui_transparency = 20
 
         # 从配置文件加载上次保存的设置
         self._load_ui_config()
@@ -91,6 +102,8 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
 
         # 拖拽状态
         self._drag_pos = None
+        # 无边框窗口的拖动状态
+        self._win_drag_pos = None
 
         # .ui 无法表达的细节：文件名叠加层不拦截鼠标；图片区左/右 = 5:1
         for lbl in (self.filename_label, self.filename_label2, self.filename_label3):
@@ -135,6 +148,12 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.tab_btn3.clicked.connect(lambda: self.stack.setCurrentIndex(2))
         self.tab_btn4.clicked.connect(lambda: self.stack.setCurrentIndex(3))
         self.stack.currentChanged.connect(self._on_tab_changed)
+
+        # 自定义页眉（标题栏）：最小化 / 最大化-还原 / 关闭
+        self.min_btn.clicked.connect(self.showMinimized)
+        self.max_btn.clicked.connect(self._toggle_max_restore)
+        self.close_btn.clicked.connect(self.close)
+        self.titlebar.installEventFilter(self)   # 双击页眉 → 最大化/还原
 
         # Tab1
         self.search_btn.clicked.connect(self.on_search_clicked)
@@ -235,16 +254,23 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
 
     # ==================== 配置读写 ====================
     def _load_ui_config(self):
-        """从 config/config.json 加载背景图、子控件透明度、PHPSESSID"""
+        """从 config/config.json 加载背景图、子控件透明度、PHPSESSID
+
+        首次运行（无配置文件）默认：背景图 = theme/default_image 的预设 1，透明度 = 20；
+        若配置里显式存了空字符串，表示用户主动选择了「无」，保持为空。
+        """
         cfg = config_logic.load_ui_config()
-        bg = cfg.get('background_image') or ''
-        if bg and not os.path.exists(bg):
-            bg = ''
+        if 'background_image' in cfg:
+            bg = cfg.get('background_image') or ''
+            if bg and not os.path.exists(bg):
+                bg = ''
+        else:
+            bg = config_logic.default_image
         self.background_image = bg
         try:
-            v = int(cfg.get('ui_transparency', 0))
+            v = int(cfg.get('ui_transparency', 20))
         except (TypeError, ValueError):
-            v = 0
+            v = 20
         self.ui_transparency = max(0, min(100, v))
         self.phpsessid = cfg.get('phpsessid') or ''
 
@@ -254,7 +280,80 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             self.background_image, self.ui_transparency, getattr(self, 'phpsessid', '') or ''
         )
 
+    # ==================== 无边框窗口：拖动移动 / 边缘缩放 ====================
+    _RESIZE_MARGIN = 6
+
+    def _edge_at(self, local_pos):
+        """判断鼠标位于窗口的哪条边/角（无边框窗口的缩放热区）"""
+        m = self._RESIZE_MARGIN
+        rect = self.rect()
+        x, y = local_pos.x(), local_pos.y()
+        left = x <= m
+        right = x >= rect.width() - m
+        top = y <= m
+        bottom = y >= rect.height() - m
+        edges = None
+        for edge, on in ((Qt.Edge.LeftEdge, left), (Qt.Edge.RightEdge, right),
+                         (Qt.Edge.TopEdge, top), (Qt.Edge.BottomEdge, bottom)):
+            if on:
+                edges = edge if edges is None else (edges | edge)
+        return edges
+
+    def _update_resize_cursor(self, local_pos):
+        edges = self._edge_at(local_pos)
+        if edges is None:
+            self.unsetCursor()
+            return
+        if edges in (Qt.Edge.LeftEdge, Qt.Edge.RightEdge):
+            self.setCursor(Qt.CursorShape.SizeHorCursor)
+        elif edges in (Qt.Edge.TopEdge, Qt.Edge.BottomEdge):
+            self.setCursor(Qt.CursorShape.SizeVerCursor)
+        elif edges == (Qt.Edge.LeftEdge | Qt.Edge.TopEdge) or \
+                edges == (Qt.Edge.RightEdge | Qt.Edge.BottomEdge):
+            self.setCursor(Qt.CursorShape.SizeFDiagCursor)
+        else:
+            self.setCursor(Qt.CursorShape.SizeBDiagCursor)
+
+    def mousePressEvent(self, event):
+        """左键：窗口边缘 → 系统缩放；其它空白处 → 拖动整个窗口"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            # 最大化状态下拖动 → 先还原，再继续拖动
+            if self._maximized_custom:
+                self._toggle_max_restore()
+            pos = self.mapFromGlobal(event.globalPosition().toPoint())
+            edges = self._edge_at(pos)
+            if edges is not None:
+                handle = self.windowHandle()
+                if handle is not None:
+                    handle.startSystemResize(edges)
+                    event.accept()
+                    return
+            self._win_drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._win_drag_pos is not None and (event.buttons() & Qt.MouseButton.LeftButton):
+            self.move(event.globalPosition().toPoint() - self._win_drag_pos)
+            event.accept()
+            return
+        if not event.buttons():
+            self._update_resize_cursor(self.mapFromGlobal(event.globalPosition().toPoint()))
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._win_drag_pos = None
+        super().mouseReleaseEvent(event)
+
     def eventFilter(self, obj, event):
+        # 页眉：双击空白处 → 最大化 / 还原（与系统标题栏行为一致）
+        if obj is getattr(self, 'titlebar', None) and \
+                event.type() == QEvent.Type.MouseButtonDblClick:
+            self._toggle_max_restore()
+            return True
+
         # 滚轮缩放
         if event.type() == QEvent.Type.Wheel:
             if obj is self.image_label or obj is self.scroll_area.viewport():
@@ -692,7 +791,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
     def _apply_appearance(self):
         """背景图（等比不拉伸）+ 子控件背景（白色 + 透明度）。
 
-        - 白色背景只画在 QGroupBox 的边框（黑线）**以内**（显式指定 border）；
+        - 白色背景只画在 QGroupBox 的边框（灰线）**以内**（显式指定 border）；
         - 图片显示区（QScrollArea）的背景同样受透明度控制；
         - 输入类控件不参与，保持不透明、文字清晰；
         - 页面空处固定透明，用来露出背景图。
@@ -947,14 +1046,14 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
     def _on_tab_changed(self, index):
         """切换标签时更新侧边栏按钮样式（白底半透明 + 深色文字）"""
         active = """
-            QPushButton { text-align: left; padding: 8px 15px; border: none;
-                          color: #222; font-size: 13px; background: rgba(0, 0, 0, 40); }
-            QPushButton:hover { background: rgba(0, 0, 0, 60); }
+            QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;
+                          color: #222; font-size: 13px; background: rgba(0, 0, 0, 60); }
+            QPushButton:hover { background: rgba(0, 0, 0, 80); }
         """
         inactive = """
-            QPushButton { text-align: left; padding: 8px 15px; border: none;
-                          color: #444; font-size: 13px; background: transparent; }
-            QPushButton:hover { background: rgba(0, 0, 0, 30); }
+            QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;
+                          color: #444; font-size: 13px; background: rgba(0, 0, 0, 25); }
+            QPushButton:hover { background: rgba(0, 0, 0, 45); }
         """
         self.tab_btn1.setStyleSheet(active if index == 0 else inactive)
         self.tab_btn2.setStyleSheet(active if index == 1 else inactive)
@@ -979,11 +1078,52 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         elif index == 2 and self._pixmap3 is not None:
             QTimer.singleShot(0, lambda: self._apply_zoom(self.image_label3, self._zoom3))
 
+    # ==================== 自定义页眉：最小化 / 最大化 / 关闭 ====================
+    def _toggle_max_restore(self):
+        """最大化 / 还原（无边框窗口，铺满屏幕可用工作区）"""
+        if self._maximized_custom:
+            if self._normal_geometry is not None:
+                self.setGeometry(self._normal_geometry)
+            self._maximized_custom = False
+        else:
+            self._normal_geometry = self.geometry()
+            screen = self.screen() or QApplication.primaryScreen()
+            if screen is not None:
+                self.setGeometry(screen.availableGeometry())
+            self._maximized_custom = True
+        self._sync_max_btn()
+
+    def _sync_max_btn(self):
+        """切换最大化按钮的字形与提示"""
+        if getattr(self, 'max_btn', None) is None:
+            return
+        if self._maximized_custom:
+            self.max_btn.setText('\u2750')   # ❐ 还原
+            self.max_btn.setToolTip('还原')
+        else:
+            self.max_btn.setText('\u25a1')   # □ 最大化
+            self.max_btn.setToolTip('最大化')
+
     def _set_app_icon(self):
-        """设置窗口图标（使用 pixiv.ico）"""
-        ico_path = config_logic.resource_path("pixiv.ico")
-        if os.path.exists(ico_path):
+        """设置窗口图标，并把同一图标贴到自定义页眉最左侧。
+
+        图标文件放在项目根目录，按顺序找 pixiv.ico → pixiv.png；
+        找不到就把页眉左侧的图标位隐藏。
+        """
+        for name in ('pixiv.ico', 'pixiv.png'):
+            ico_path = config_logic.resource_path(name)
+            if not os.path.exists(ico_path):
+                continue
             self.setWindowIcon(QIcon(ico_path))
+            pm = QPixmap(ico_path)
+            if pm.isNull() or getattr(self, 'app_icon', None) is None:
+                continue
+            self.app_icon.setPixmap(pm.scaled(
+                22, 22, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation))
+            return
+        if getattr(self, 'app_icon', None) is not None:
+            self.app_icon.hide()
 
     def update_image_display(self, index=None, label=None):
         if label is None:

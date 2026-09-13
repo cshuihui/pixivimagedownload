@@ -30,6 +30,8 @@ SPEC_FILE = os.path.join(PROJECT_ROOT, f"{APP_NAME}.spec")
 DATA_FILES = [
     ("143035291_p0.jpg", "."),          # 默认显示图片
     ("pixiv.ico", "."),                 # 程序图标
+    ("ui/app.qss", "ui"),               # 统一样式表（_load_app_qss 按 ui/app.qss 查找）
+    ("theme", "theme"),                 # 预设背景图（resource_path('theme/default_image')）
 ]
 
 # 需要额外引入的隐藏模块

@@ -15,10 +15,13 @@ import os
 import shutil
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QLabel, QMessageBox, QFileDialog
+    QApplication, QMainWindow, QLabel, QMessageBox, QFileDialog,
+    QGraphicsDropShadowEffect
 )
-from PySide6.QtGui import QPixmap, QIcon, QShortcut, QKeySequence
-from PySide6.QtCore import Qt, QThread, QTimer, QEvent
+from PySide6.QtGui import (
+    QPixmap, QIcon, QShortcut, QKeySequence, QColor, QPainter, QPainterPath
+)
+from PySide6.QtCore import Qt, QThread, QTimer, QEvent, QPoint, QRectF
 
 from types import SimpleNamespace
 
@@ -41,12 +44,23 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self._set_app_icon()
         # 无边框窗口：页眉改由 main_window.ui 里的自定义 titlebar 承担
         # （左侧 app_icon + app_title，右侧 min_btn / max_btn / close_btn）
+        # 圆角的前提：窗口自身透明，不透明背景交给 card 自己画
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setWindowFlags(
             Qt.WindowType.Window
             | Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowSystemMenuHint   # 保留系统菜单 → Alt+F4 可关闭
         )
         self.setMouseTracking(True)
+
+        # 统一样式表（ui/app.qss）
+        self._load_app_qss()
+        # 卡片外阴影：main_window.ui 的 main_layout 已留出 16px 透明边距
+        self._card_shadow = QGraphicsDropShadowEffect(self)
+        self._card_shadow.setBlurRadius(12)
+        self._card_shadow.setOffset(0, 2)
+        self._card_shadow.setColor(QColor(0, 0, 0, 80))
+        self.card.setGraphicsEffect(self._card_shadow)
         # 自定义最大化状态（无边框窗口自行管理，铺满屏幕工作区）
         self._maximized_custom = False
         self._normal_geometry = None
@@ -223,6 +237,8 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.opacity_value_label.setText(f"{self.ui_transparency}%")
         # 应用背景图 + 子控件透明度
         self._apply_appearance()
+        # 卡片圆角 / 阴影 / 边距（依赖 _maximized_custom，须在窗口状态就绪后再调用）
+        self._apply_card_state()
         # 缓存大小
         self._update_cache_size()
 
@@ -280,18 +296,61 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             self.background_image, self.ui_transparency, getattr(self, 'phpsessid', '') or ''
         )
 
+    # ==================== 样式表 / 卡片圆角与阴影 ====================
+    _CARD_RADIUS = 10      # 需与 ui/app.qss 中 #card 的 border-radius 一致
+    _SHADOW_MARGIN = 16    # 需与 main_window.ui 中 main_layout 的边距一致
+
+    def _load_app_qss(self):
+        """加载 ui/app.qss 统一样式表
+
+        开发态从工作目录取；打包后由 resource_path 定位到解包目录。
+        """
+        qss_path = config_logic.resource_path(os.path.join('ui', 'app.qss'))
+        if not os.path.exists(qss_path):
+            qss_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.qss')
+        try:
+            with open(qss_path, 'r', encoding='utf-8') as f:
+                self.setStyleSheet(f.read())
+        except OSError as e:
+            print(f"加载样式表失败: {e}")
+
+    def _apply_card_state(self):
+        """按「最大化 / 常规」状态应用圆角、阴影与四周边距
+
+        最大化时必须关掉圆角与阴影：铺满屏幕时圆角会露出四角豁口，
+        阴影则会在屏幕边缘形成一圈光晕。
+        """
+        maximized = self._maximized_custom
+        flag = "true" if maximized else "false"
+        # 属性名用 winMaximized：QWidget 已有内置只读属性 maximized，
+        # 用那个名字 setProperty 会静默失败，QSS 选择器就永远匹配不上
+        for w in (self.card, self.titlebar, self.sidebar):
+            w.setProperty("winMaximized", flag)
+            w.style().unpolish(w)
+            w.style().polish(w)
+        if getattr(self, '_card_shadow', None) is not None:
+            self._card_shadow.setEnabled(not maximized)
+        m = 0 if maximized else self._SHADOW_MARGIN
+        self.main_layout.setContentsMargins(m, m, m, m)
+        self._update_bg_pixmap()   # 背景图需按当前圆角重新裁切
+
     # ==================== 无边框窗口：拖动移动 / 边缘缩放 ====================
     _RESIZE_MARGIN = 6
 
     def _edge_at(self, local_pos):
-        """判断鼠标位于窗口的哪条边/角（无边框窗口的缩放热区）"""
+        """判断鼠标位于卡片哪条边/角（无边框窗口的缩放热区）
+
+        热区贴着「可见」的卡片边缘，而不是窗口外沿 —— 窗口四周另有 16px
+        透明阴影边距，若按窗口矩形判定，用户得把鼠标移出可见范围才能缩放。
+        """
         m = self._RESIZE_MARGIN
-        rect = self.rect()
+        tl = self.card.mapTo(self, QPoint(0, 0))
+        br = self.card.mapTo(self, QPoint(self.card.width(), self.card.height()))
         x, y = local_pos.x(), local_pos.y()
-        left = x <= m
-        right = x >= rect.width() - m
-        top = y <= m
-        bottom = y >= rect.height() - m
+        left = x <= tl.x() + m
+        right = x >= br.x() - m
+        top = y <= tl.y() + m
+        bottom = y >= br.y() - m
         edges = None
         for edge, on in ((Qt.Edge.LeftEdge, left), (Qt.Edge.RightEdge, right),
                          (Qt.Edge.TopEdge, top), (Qt.Edge.BottomEdge, bottom)):
@@ -751,9 +810,13 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.show_toast("🧹 缓存已清理", "success", 1500)
 
     def _ensure_bg_label(self):
-        """背景图用一个铺底 QLabel 绘制（保持在所有子控件下方）"""
+        """背景图用一个铺底 QLabel 绘制（保持在所有子控件下方）
+
+        挂在 card 上（而不是 centralwidget），这样它被限制在卡片范围内，
+        并且能在代码里按卡片圆角做裁切 —— 子控件不会被父级 border-radius 裁剪。
+        """
         if getattr(self, '_bg_label', None) is None:
-            lbl = QLabel(self.centralwidget)
+            lbl = QLabel(self.card)
             lbl.setObjectName('bg_label')
             lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
             lbl.setAlignment(Qt.AlignCenter)
@@ -777,12 +840,28 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         if self._bg_pixmap is None or self._bg_pixmap.isNull():
             lbl.hide()
             return
-        size = self.centralwidget.size()
+        size = self.card.size()
         if size.width() <= 1 or size.height() <= 1:
             return
         scaled = self._bg_pixmap.scaled(size, Qt.KeepAspectRatio,
                                         Qt.TransformationMode.SmoothTransformation)
-        lbl.setPixmap(scaled)
+
+        # 按卡片圆角裁切（子控件不受父级 border-radius 约束，必须自己裁）
+        radius = 0 if self._maximized_custom else self._CARD_RADIUS
+        canvas = QPixmap(size)
+        canvas.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if radius > 0:
+            path = QPainterPath()
+            path.addRoundedRect(QRectF(0, 0, size.width(), size.height()),
+                                radius, radius)
+            painter.setClipPath(path)
+        painter.drawPixmap((size.width() - scaled.width()) // 2,
+                           (size.height() - scaled.height()) // 2, scaled)
+        painter.end()
+
+        lbl.setPixmap(canvas)
         lbl.resize(size)
         lbl.move(0, 0)
         lbl.lower()   # 保持在侧边栏 / 堆栈面板下方
@@ -811,11 +890,13 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         )
         self.stack.setStyleSheet(qss)
 
-        # 图片显示区：背景也由透明度控制（白色画在边框以内），视口透明
+        # 图片显示区：背景也由透明度控制（白色画在边框以内），视口透明。
+        # 边框原写在 main_window.ui 各 scroll_area 的 inline 样式里，现收敛到此处
+        # 统一管理 —— 只有这里能同时写入随滑块变化的 alpha。
         for sa in (self.scroll_area, self.scroll_area2, self.scroll_area3):
             sa.setStyleSheet(
                 f"QScrollArea {{ background-color: rgba(255, 255, 255, {alpha:.3f}); "
-                "border: 1px solid #808080; }"
+                "border: 1px solid gray; }"
             )
             sa.viewport().setStyleSheet("background: transparent;")
 
@@ -1044,21 +1125,16 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self._navigate(3, 1)
 
     def _on_tab_changed(self, index):
-        """切换标签时更新侧边栏按钮样式（白底半透明 + 深色文字）"""
-        active = """
-            QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;
-                          color: #222; font-size: 13px; background: rgba(0, 0, 0, 60); }
-            QPushButton:hover { background: rgba(0, 0, 0, 80); }
+        """切换标签时更新侧边栏按钮选中态
+
+        样式本身写在 ui/app.qss（#tab_btnN[active="true"]），这里只翻转动态属性，
+        避免为「选中 / 未选中」各维护一份手写样式。
         """
-        inactive = """
-            QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;
-                          color: #444; font-size: 13px; background: rgba(0, 0, 0, 25); }
-            QPushButton:hover { background: rgba(0, 0, 0, 45); }
-        """
-        self.tab_btn1.setStyleSheet(active if index == 0 else inactive)
-        self.tab_btn2.setStyleSheet(active if index == 1 else inactive)
-        self.tab_btn3.setStyleSheet(active if index == 2 else inactive)
-        self.tab_btn4.setStyleSheet(active if index == 3 else inactive)
+        for i, btn in enumerate((self.tab_btn1, self.tab_btn2,
+                                 self.tab_btn3, self.tab_btn4)):
+            btn.setProperty("active", "true" if i == index else "false")
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
 
         # 进入设置页时刷新缓存大小
         if index == 3:
@@ -1091,6 +1167,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             if screen is not None:
                 self.setGeometry(screen.availableGeometry())
             self._maximized_custom = True
+        self._apply_card_state()
         self._sync_max_btn()
 
     def _sync_max_btn(self):
@@ -1230,7 +1307,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
     def resizeEvent(self, event):
         """窗口缩放时重绘图片与背景图"""
         super().resizeEvent(event)
-        if hasattr(self, 'centralwidget'):
+        if hasattr(self, 'card'):
             self._update_bg_pixmap()
         if hasattr(self, 'image_label') and self._pixmap1:
             self._apply_zoom(self.image_label, self._zoom1)

@@ -1,0 +1,151 @@
+/* ==========================================================================
+   Pixiv 图片筛选器 — 全局样式表
+   --------------------------------------------------------------------------
+   配色沿用原有亮色系：浅灰卡片 + 白色半透明面板 + 深色文字。
+
+   由 ui/main_window.py 的 _load_app_qss() 在启动时 setStyleSheet 到主窗口。
+
+   注意（有意不在此处定义的样式）：
+   - QGroupBox / QScrollArea 的背景与边框由 _apply_appearance() 动态生成
+     （它们随「透明度」滑块变化，且需按控件单独 setStyleSheet 才能覆盖），
+     因此不在此文件重复定义，避免出现多个 owner 互相覆盖。
+   - php_status_label / model_status_label / bg_status_label 的文字颜色由
+     运行时按状态 setStyleSheet，此处只保留其内边距。
+   ========================================================================== */
+
+/* ---------- 卡片容器：圆角 + 不透明底（窗口本身透明） ---------- */
+/* 圆角值需与 ui/main_window.py 的 _CARD_RADIUS 保持一致 */
+#card {
+    background-color: #f0f0f0;
+    border-radius: 10px;
+}
+/* 最大化时圆角归零。
+   属性名用 winMaximized 而非 maximized —— 后者与 QWidget 内置只读属性同名，
+   setProperty 会静默失败，导致选择器永不匹配。 */
+#card[winMaximized="true"] {
+    border-radius: 0px;
+}
+
+/* centralwidget 只负责给阴影留出 16px 透明边距 */
+#centralwidget {
+    background: transparent;
+}
+
+/* ---------- 自定义页眉 ---------- */
+#titlebar {
+    background-color: rgba(240, 240, 240, 235);
+    border-bottom: 1px solid rgba(120, 120, 120, 110);
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+#titlebar[winMaximized="true"] {
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+}
+#app_icon {
+    background: transparent;
+}
+#app_title {
+    background: transparent;
+    color: #333333;
+    font-size: 13px;
+    padding-left: 6px;
+}
+
+/* ---------- 窗口控制按钮（三个字形大小不同，保留各自字号） ---------- */
+#min_btn, #max_btn, #close_btn {
+    border: none;
+    background: transparent;
+    color: #444444;
+}
+#min_btn  { font-size: 15px; }
+#max_btn  { font-size: 13px; }
+#close_btn { font-size: 14px; }
+#min_btn:hover, #max_btn:hover {
+    background: rgba(0, 0, 0, 35);
+    color: #000000;
+}
+#min_btn:pressed, #max_btn:pressed {
+    background: rgba(0, 0, 0, 60);
+}
+#close_btn:hover {
+    background: #E81123;
+    color: #ffffff;
+}
+#close_btn:pressed {
+    background: #C10B1B;
+    color: #ffffff;
+}
+
+/* ---------- 侧边栏 ---------- */
+#sidebar {
+    background-color: rgba(255, 255, 255, 180);
+    border-bottom-left-radius: 10px;
+}
+#sidebar[winMaximized="true"] {
+    border-bottom-left-radius: 0px;
+}
+
+/* ---------- 侧边栏 Tab 按钮 ---------- */
+/* 选中态由动态属性 active 驱动（见 _on_tab_changed），不是手写两份样式 */
+#tab_btn1, #tab_btn2, #tab_btn3, #tab_btn4 {
+    text-align: center;
+    padding: 0px;
+    border: none;
+    border-radius: 8px;
+    color: #444;
+    font-size: 13px;
+    background: rgba(0, 0, 0, 25);
+}
+#tab_btn1:hover, #tab_btn2:hover, #tab_btn3:hover, #tab_btn4:hover {
+    background: rgba(0, 0, 0, 45);
+}
+#tab_btn1[active="true"], #tab_btn2[active="true"],
+#tab_btn3[active="true"], #tab_btn4[active="true"] {
+    color: #222;
+    background: rgba(0, 0, 0, 60);
+}
+#tab_btn1[active="true"]:hover, #tab_btn2[active="true"]:hover,
+#tab_btn3[active="true"]:hover, #tab_btn4[active="true"]:hover {
+    background: rgba(0, 0, 0, 80);
+}
+
+/* ---------- 文件名叠加角标 ---------- */
+#filename_label, #filename_label2, #filename_label3 {
+    background-color: rgba(0, 0, 0, 150);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+/* ---------- 功能按钮（三个 Tab 共用同一套配色） ---------- */
+#stop_btn, #stop_btn2, #stop_btn3 {
+    background-color: #dc3545;
+    color: white;
+}
+#search_btn, #search_btn2, #search_btn3 {
+    background-color: #0084ff;
+    color: white;
+}
+#prev_btn, #prev_btn2, #prev_btn3,
+#next_btn, #next_btn2, #next_btn3 {
+    background-color: #6c757d;
+    color: white;
+}
+#save_btn, #save_btn2, #save_btn3 {
+    background-color: #28a745;
+    color: white;
+}
+
+/* ---------- 设置页 ---------- */
+#settings_title {
+    font-size: 18px;
+    font-weight: bold;
+    padding: 10px;
+}
+#php_status_label,
+#model_status_label,
+#bg_status_label {
+    padding: 4px;
+}

@@ -31,12 +31,22 @@ class Ui_MainWindow(object):
         self.main_layout = QVBoxLayout(self.centralwidget)
         self.main_layout.setSpacing(0)
         self.main_layout.setObjectName(u"main_layout")
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.titlebar = QWidget(self.centralwidget)
+        self.main_layout.setContentsMargins(16, 16, 16, 16)
+        self.card = QWidget(self.centralwidget)
+        self.card.setObjectName(u"card")
+        sizePolicy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.card.sizePolicy().hasHeightForWidth())
+        self.card.setSizePolicy(sizePolicy)
+        self.card_layout = QVBoxLayout(self.card)
+        self.card_layout.setSpacing(0)
+        self.card_layout.setObjectName(u"card_layout")
+        self.card_layout.setContentsMargins(0, 0, 0, 0)
+        self.titlebar = QWidget(self.card)
         self.titlebar.setObjectName(u"titlebar")
         self.titlebar.setMinimumSize(QSize(0, 38))
         self.titlebar.setMaximumSize(QSize(16777215, 38))
-        self.titlebar.setStyleSheet(u"#titlebar { background-color: rgba(240, 240, 240, 235); border-bottom: 1px solid rgba(120, 120, 120, 110); }")
         self.titlebar_layout = QHBoxLayout(self.titlebar)
         self.titlebar_layout.setSpacing(0)
         self.titlebar_layout.setObjectName(u"titlebar_layout")
@@ -45,14 +55,12 @@ class Ui_MainWindow(object):
         self.app_icon.setObjectName(u"app_icon")
         self.app_icon.setMinimumSize(QSize(22, 22))
         self.app_icon.setMaximumSize(QSize(22, 22))
-        self.app_icon.setStyleSheet(u"background: transparent;")
         self.app_icon.setScaledContents(True)
 
         self.titlebar_layout.addWidget(self.app_icon)
 
         self.app_title = QLabel(self.titlebar)
         self.app_title.setObjectName(u"app_title")
-        self.app_title.setStyleSheet(u"background: transparent; color: #333333; font-size: 13px; padding-left: 6px;")
 
         self.titlebar_layout.addWidget(self.app_title)
 
@@ -64,9 +72,6 @@ class Ui_MainWindow(object):
         self.min_btn.setObjectName(u"min_btn")
         self.min_btn.setMinimumSize(QSize(45, 38))
         self.min_btn.setMaximumSize(QSize(45, 38))
-        self.min_btn.setStyleSheet(u"QPushButton { border: none; background: transparent; color: #444444; font-size: 15px; }\n"
-"QPushButton:hover { background: rgba(0, 0, 0, 35); color: #000000; }\n"
-"QPushButton:pressed { background: rgba(0, 0, 0, 60); }")
 
         self.titlebar_layout.addWidget(self.min_btn)
 
@@ -74,9 +79,6 @@ class Ui_MainWindow(object):
         self.max_btn.setObjectName(u"max_btn")
         self.max_btn.setMinimumSize(QSize(45, 38))
         self.max_btn.setMaximumSize(QSize(45, 38))
-        self.max_btn.setStyleSheet(u"QPushButton { border: none; background: transparent; color: #444444; font-size: 13px; }\n"
-"QPushButton:hover { background: rgba(0, 0, 0, 35); color: #000000; }\n"
-"QPushButton:pressed { background: rgba(0, 0, 0, 60); }")
 
         self.titlebar_layout.addWidget(self.max_btn)
 
@@ -84,22 +86,19 @@ class Ui_MainWindow(object):
         self.close_btn.setObjectName(u"close_btn")
         self.close_btn.setMinimumSize(QSize(45, 38))
         self.close_btn.setMaximumSize(QSize(45, 38))
-        self.close_btn.setStyleSheet(u"QPushButton { border: none; background: transparent; color: #444444; font-size: 14px; }\n"
-"QPushButton:hover { background: #E81123; color: #ffffff; }\n"
-"QPushButton:pressed { background: #C10B1B; color: #ffffff; }")
 
         self.titlebar_layout.addWidget(self.close_btn)
 
 
-        self.main_layout.addWidget(self.titlebar)
+        self.card_layout.addWidget(self.titlebar)
 
-        self.body = QWidget(self.centralwidget)
+        self.body = QWidget(self.card)
         self.body.setObjectName(u"body")
-        sizePolicy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.body.sizePolicy().hasHeightForWidth())
-        self.body.setSizePolicy(sizePolicy)
+        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        sizePolicy1.setHorizontalStretch(0)
+        sizePolicy1.setVerticalStretch(0)
+        sizePolicy1.setHeightForWidth(self.body.sizePolicy().hasHeightForWidth())
+        self.body.setSizePolicy(sizePolicy1)
         self.body_layout = QHBoxLayout(self.body)
         self.body_layout.setSpacing(0)
         self.body_layout.setObjectName(u"body_layout")
@@ -108,7 +107,6 @@ class Ui_MainWindow(object):
         self.sidebar.setObjectName(u"sidebar")
         self.sidebar.setMinimumSize(QSize(130, 0))
         self.sidebar.setMaximumSize(QSize(130, 16777215))
-        self.sidebar.setStyleSheet(u"background-color: rgba(255, 255, 255, 180);")
         self.sidebar_layout = QVBoxLayout(self.sidebar)
         self.sidebar_layout.setSpacing(8)
         self.sidebar_layout.setObjectName(u"sidebar_layout")
@@ -117,9 +115,6 @@ class Ui_MainWindow(object):
         self.tab_btn1.setObjectName(u"tab_btn1")
         self.tab_btn1.setMinimumSize(QSize(0, 45))
         self.tab_btn1.setMaximumSize(QSize(16777215, 45))
-        self.tab_btn1.setStyleSheet(u"QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;\n"
-"              color: #222; font-size: 13px; background: rgba(0, 0, 0, 60); }\n"
-"QPushButton:hover { background: rgba(0, 0, 0, 80); }")
 
         self.sidebar_layout.addWidget(self.tab_btn1)
 
@@ -127,9 +122,6 @@ class Ui_MainWindow(object):
         self.tab_btn2.setObjectName(u"tab_btn2")
         self.tab_btn2.setMinimumSize(QSize(0, 45))
         self.tab_btn2.setMaximumSize(QSize(16777215, 45))
-        self.tab_btn2.setStyleSheet(u"QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;\n"
-"              color: #444; font-size: 13px; background: rgba(0, 0, 0, 25); }\n"
-"QPushButton:hover { background: rgba(0, 0, 0, 45); }")
 
         self.sidebar_layout.addWidget(self.tab_btn2)
 
@@ -137,9 +129,6 @@ class Ui_MainWindow(object):
         self.tab_btn3.setObjectName(u"tab_btn3")
         self.tab_btn3.setMinimumSize(QSize(0, 45))
         self.tab_btn3.setMaximumSize(QSize(16777215, 45))
-        self.tab_btn3.setStyleSheet(u"QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;\n"
-"              color: #444; font-size: 13px; background: rgba(0, 0, 0, 25); }\n"
-"QPushButton:hover { background: rgba(0, 0, 0, 45); }")
 
         self.sidebar_layout.addWidget(self.tab_btn3)
 
@@ -147,9 +136,6 @@ class Ui_MainWindow(object):
         self.tab_btn4.setObjectName(u"tab_btn4")
         self.tab_btn4.setMinimumSize(QSize(0, 45))
         self.tab_btn4.setMaximumSize(QSize(16777215, 45))
-        self.tab_btn4.setStyleSheet(u"QPushButton { text-align: center; padding: 0px; border: none; border-radius: 8px;\n"
-"              color: #444; font-size: 13px; background: rgba(0, 0, 0, 25); }\n"
-"QPushButton:hover { background: rgba(0, 0, 0, 45); }")
 
         self.sidebar_layout.addWidget(self.tab_btn4)
 
@@ -222,7 +208,6 @@ class Ui_MainWindow(object):
         self.container_layout1.setContentsMargins(0, 0, 0, 0)
         self.scroll_area = QScrollArea(self.image_container)
         self.scroll_area.setObjectName(u"scroll_area")
-        self.scroll_area.setStyleSheet(u"border: 1px solid gray;")
         self.scroll_area.setWidgetResizable(False)
         self.scroll_area.setAlignment(Qt.AlignCenter)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -236,11 +221,6 @@ class Ui_MainWindow(object):
 
         self.filename_label = QLabel(self.image_container)
         self.filename_label.setObjectName(u"filename_label")
-        self.filename_label.setStyleSheet(u"background-color: rgba(0,0,0,150);\n"
-"color: white;\n"
-"padding: 2px 8px;\n"
-"border-radius: 3px;\n"
-"font-size: 12px;")
         self.filename_label.setAlignment(Qt.AlignRight|Qt.AlignVCenter)
 
         self.container_layout1.addWidget(self.filename_label, 0, 0, 1, 1, Qt.AlignRight|Qt.AlignTop)
@@ -304,7 +284,6 @@ class Ui_MainWindow(object):
 
         self.stop_btn = QPushButton(self.info_group1)
         self.stop_btn.setObjectName(u"stop_btn")
-        self.stop_btn.setStyleSheet(u"background-color: #dc3545; color: white;")
         self.stop_btn.setVisible(False)
 
         self.info_layout1.addWidget(self.stop_btn)
@@ -326,25 +305,21 @@ class Ui_MainWindow(object):
         self.button_layout1.setObjectName(u"button_layout1")
         self.search_btn = QPushButton(self.tab1)
         self.search_btn.setObjectName(u"search_btn")
-        self.search_btn.setStyleSheet(u"background-color: #0084ff; color: white;")
 
         self.button_layout1.addWidget(self.search_btn)
 
         self.prev_btn = QPushButton(self.tab1)
         self.prev_btn.setObjectName(u"prev_btn")
-        self.prev_btn.setStyleSheet(u"background-color: #6c757d; color: white;")
 
         self.button_layout1.addWidget(self.prev_btn)
 
         self.next_btn = QPushButton(self.tab1)
         self.next_btn.setObjectName(u"next_btn")
-        self.next_btn.setStyleSheet(u"background-color: #6c757d; color: white;")
 
         self.button_layout1.addWidget(self.next_btn)
 
         self.save_btn = QPushButton(self.tab1)
         self.save_btn.setObjectName(u"save_btn")
-        self.save_btn.setStyleSheet(u"background-color: #28a745; color: white;")
 
         self.button_layout1.addWidget(self.save_btn)
 
@@ -368,7 +343,6 @@ class Ui_MainWindow(object):
         self.container_layout2.setContentsMargins(0, 0, 0, 0)
         self.scroll_area2 = QScrollArea(self.image_container2)
         self.scroll_area2.setObjectName(u"scroll_area2")
-        self.scroll_area2.setStyleSheet(u"border: 1px solid gray;")
         self.scroll_area2.setWidgetResizable(False)
         self.scroll_area2.setAlignment(Qt.AlignCenter)
         self.scroll_area2.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -382,11 +356,6 @@ class Ui_MainWindow(object):
 
         self.filename_label2 = QLabel(self.image_container2)
         self.filename_label2.setObjectName(u"filename_label2")
-        self.filename_label2.setStyleSheet(u"background-color: rgba(0,0,0,150);\n"
-"color: white;\n"
-"padding: 2px 8px;\n"
-"border-radius: 3px;\n"
-"font-size: 12px;")
         self.filename_label2.setAlignment(Qt.AlignRight|Qt.AlignVCenter)
 
         self.container_layout2.addWidget(self.filename_label2, 0, 0, 1, 1, Qt.AlignRight|Qt.AlignTop)
@@ -492,7 +461,6 @@ class Ui_MainWindow(object):
 
         self.stop_btn2 = QPushButton(self.info_group2)
         self.stop_btn2.setObjectName(u"stop_btn2")
-        self.stop_btn2.setStyleSheet(u"background-color: #dc3545; color: white;")
         self.stop_btn2.setVisible(False)
 
         self.info_layout2.addWidget(self.stop_btn2)
@@ -514,25 +482,21 @@ class Ui_MainWindow(object):
         self.button_layout2.setObjectName(u"button_layout2")
         self.search_btn2 = QPushButton(self.tab2)
         self.search_btn2.setObjectName(u"search_btn2")
-        self.search_btn2.setStyleSheet(u"background-color: #0084ff; color: white;")
 
         self.button_layout2.addWidget(self.search_btn2)
 
         self.prev_btn2 = QPushButton(self.tab2)
         self.prev_btn2.setObjectName(u"prev_btn2")
-        self.prev_btn2.setStyleSheet(u"background-color: #6c757d; color: white;")
 
         self.button_layout2.addWidget(self.prev_btn2)
 
         self.next_btn2 = QPushButton(self.tab2)
         self.next_btn2.setObjectName(u"next_btn2")
-        self.next_btn2.setStyleSheet(u"background-color: #6c757d; color: white;")
 
         self.button_layout2.addWidget(self.next_btn2)
 
         self.save_btn2 = QPushButton(self.tab2)
         self.save_btn2.setObjectName(u"save_btn2")
-        self.save_btn2.setStyleSheet(u"background-color: #28a745; color: white;")
 
         self.button_layout2.addWidget(self.save_btn2)
 
@@ -573,7 +537,6 @@ class Ui_MainWindow(object):
         self.container_layout3.setContentsMargins(0, 0, 0, 0)
         self.scroll_area3 = QScrollArea(self.image_container3)
         self.scroll_area3.setObjectName(u"scroll_area3")
-        self.scroll_area3.setStyleSheet(u"border: 1px solid gray;")
         self.scroll_area3.setWidgetResizable(False)
         self.scroll_area3.setAlignment(Qt.AlignCenter)
         self.scroll_area3.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -587,11 +550,6 @@ class Ui_MainWindow(object):
 
         self.filename_label3 = QLabel(self.image_container3)
         self.filename_label3.setObjectName(u"filename_label3")
-        self.filename_label3.setStyleSheet(u"background-color: rgba(0,0,0,150);\n"
-"color: white;\n"
-"padding: 2px 8px;\n"
-"border-radius: 3px;\n"
-"font-size: 12px;")
         self.filename_label3.setAlignment(Qt.AlignRight|Qt.AlignVCenter)
 
         self.container_layout3.addWidget(self.filename_label3, 0, 0, 1, 1, Qt.AlignRight|Qt.AlignTop)
@@ -651,7 +609,6 @@ class Ui_MainWindow(object):
 
         self.stop_btn3 = QPushButton(self.info_group3)
         self.stop_btn3.setObjectName(u"stop_btn3")
-        self.stop_btn3.setStyleSheet(u"background-color: #dc3545; color: white;")
         self.stop_btn3.setVisible(False)
 
         self.info_layout3.addWidget(self.stop_btn3)
@@ -673,25 +630,21 @@ class Ui_MainWindow(object):
         self.button_layout3.setObjectName(u"button_layout3")
         self.search_btn3 = QPushButton(self.tab3)
         self.search_btn3.setObjectName(u"search_btn3")
-        self.search_btn3.setStyleSheet(u"background-color: #0084ff; color: white;")
 
         self.button_layout3.addWidget(self.search_btn3)
 
         self.prev_btn3 = QPushButton(self.tab3)
         self.prev_btn3.setObjectName(u"prev_btn3")
-        self.prev_btn3.setStyleSheet(u"background-color: #6c757d; color: white;")
 
         self.button_layout3.addWidget(self.prev_btn3)
 
         self.next_btn3 = QPushButton(self.tab3)
         self.next_btn3.setObjectName(u"next_btn3")
-        self.next_btn3.setStyleSheet(u"background-color: #6c757d; color: white;")
 
         self.button_layout3.addWidget(self.next_btn3)
 
         self.save_btn3 = QPushButton(self.tab3)
         self.save_btn3.setObjectName(u"save_btn3")
-        self.save_btn3.setStyleSheet(u"background-color: #28a745; color: white;")
 
         self.button_layout3.addWidget(self.save_btn3)
 
@@ -705,7 +658,6 @@ class Ui_MainWindow(object):
         self.tab4_layout.setObjectName(u"tab4_layout")
         self.settings_title = QLabel(self.tab4)
         self.settings_title.setObjectName(u"settings_title")
-        self.settings_title.setStyleSheet(u"font-size: 18px; font-weight: bold; padding: 10px;")
 
         self.tab4_layout.addWidget(self.settings_title)
 
@@ -740,7 +692,6 @@ class Ui_MainWindow(object):
 
         self.php_status_label = QLabel(self.php_group)
         self.php_status_label.setObjectName(u"php_status_label")
-        self.php_status_label.setStyleSheet(u"padding: 4px;")
 
         self.php_group_layout.addWidget(self.php_status_label)
 
@@ -773,7 +724,6 @@ class Ui_MainWindow(object):
 
         self.model_status_label = QLabel(self.model_group)
         self.model_status_label.setObjectName(u"model_status_label")
-        self.model_status_label.setStyleSheet(u"padding: 4px; color: gray;")
 
         self.model_group_layout.addWidget(self.model_status_label)
 
@@ -874,7 +824,6 @@ class Ui_MainWindow(object):
 
         self.bg_status_label = QLabel(self.bg_group)
         self.bg_status_label.setObjectName(u"bg_status_label")
-        self.bg_status_label.setStyleSheet(u"padding: 4px; color: gray;")
 
         self.bg_layout.addWidget(self.bg_status_label)
 
@@ -916,7 +865,10 @@ class Ui_MainWindow(object):
         self.body_layout.addWidget(self.stack)
 
 
-        self.main_layout.addWidget(self.body)
+        self.card_layout.addWidget(self.body)
+
+
+        self.main_layout.addWidget(self.card)
 
         MainWindow.setCentralWidget(self.centralwidget)
 

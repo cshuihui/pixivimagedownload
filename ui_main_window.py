@@ -139,6 +139,13 @@ class Ui_MainWindow(object):
 
         self.sidebar_layout.addWidget(self.tab_btn4)
 
+        self.tab_btn5 = QPushButton(self.sidebar)
+        self.tab_btn5.setObjectName(u"tab_btn5")
+        self.tab_btn5.setMinimumSize(QSize(0, 45))
+        self.tab_btn5.setMaximumSize(QSize(16777215, 45))
+
+        self.sidebar_layout.addWidget(self.tab_btn5)
+
         self.sidebar_spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.sidebar_layout.addItem(self.sidebar_spacer)
@@ -656,12 +663,126 @@ class Ui_MainWindow(object):
         self.tab4.setObjectName(u"tab4")
         self.tab4_layout = QVBoxLayout(self.tab4)
         self.tab4_layout.setObjectName(u"tab4_layout")
-        self.settings_title = QLabel(self.tab4)
+        self.search_group4 = QGroupBox(self.tab4)
+        self.search_group4.setObjectName(u"search_group4")
+        self.search_layout4 = QGridLayout(self.search_group4)
+        self.search_layout4.setObjectName(u"search_layout4")
+        self.label_pid = QLabel(self.search_group4)
+        self.label_pid.setObjectName(u"label_pid")
+
+        self.search_layout4.addWidget(self.label_pid, 0, 0, 1, 1)
+
+        self.pid_input = QLineEdit(self.search_group4)
+        self.pid_input.setObjectName(u"pid_input")
+
+        self.search_layout4.addWidget(self.pid_input, 0, 1, 1, 1)
+
+
+        self.tab4_layout.addWidget(self.search_group4)
+
+        self.content_layout4 = QHBoxLayout()
+        self.content_layout4.setObjectName(u"content_layout4")
+        self.left_layout4 = QVBoxLayout()
+        self.left_layout4.setObjectName(u"left_layout4")
+        self.image_container4 = QWidget(self.tab4)
+        self.image_container4.setObjectName(u"image_container4")
+        self.image_container4.setMinimumSize(QSize(600, 500))
+        self.container_layout4 = QGridLayout(self.image_container4)
+        self.container_layout4.setObjectName(u"container_layout4")
+        self.container_layout4.setContentsMargins(0, 0, 0, 0)
+        self.scroll_area4 = QScrollArea(self.image_container4)
+        self.scroll_area4.setObjectName(u"scroll_area4")
+        self.scroll_area4.setWidgetResizable(False)
+        self.scroll_area4.setAlignment(Qt.AlignCenter)
+        self.scroll_area4.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area4.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.image_label4 = QLabel()
+        self.image_label4.setObjectName(u"image_label4")
+        self.image_label4.setAlignment(Qt.AlignCenter)
+        self.scroll_area4.setWidget(self.image_label4)
+
+        self.container_layout4.addWidget(self.scroll_area4, 0, 0, 1, 1)
+
+        self.filename_label4 = QLabel(self.image_container4)
+        self.filename_label4.setObjectName(u"filename_label4")
+        self.filename_label4.setAlignment(Qt.AlignRight|Qt.AlignVCenter)
+
+        self.container_layout4.addWidget(self.filename_label4, 0, 0, 1, 1, Qt.AlignRight|Qt.AlignTop)
+
+
+        self.left_layout4.addWidget(self.image_container4)
+
+
+        self.content_layout4.addLayout(self.left_layout4)
+
+        self.right_layout4 = QVBoxLayout()
+        self.right_layout4.setObjectName(u"right_layout4")
+        self.info_group4 = QGroupBox(self.tab4)
+        self.info_group4.setObjectName(u"info_group4")
+        self.info_layout4 = QVBoxLayout(self.info_group4)
+        self.info_layout4.setObjectName(u"info_layout4")
+        self.info_box4 = QTextEdit(self.info_group4)
+        self.info_box4.setObjectName(u"info_box4")
+        self.info_box4.setMaximumSize(QSize(16777215, 150))
+        self.info_box4.setReadOnly(True)
+
+        self.info_layout4.addWidget(self.info_box4)
+
+        self.stop_btn4 = QPushButton(self.info_group4)
+        self.stop_btn4.setObjectName(u"stop_btn4")
+        self.stop_btn4.setVisible(False)
+
+        self.info_layout4.addWidget(self.stop_btn4)
+
+
+        self.right_layout4.addWidget(self.info_group4)
+
+        self.right_spacer4 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+
+        self.right_layout4.addItem(self.right_spacer4)
+
+
+        self.content_layout4.addLayout(self.right_layout4)
+
+
+        self.tab4_layout.addLayout(self.content_layout4)
+
+        self.button_layout4 = QHBoxLayout()
+        self.button_layout4.setObjectName(u"button_layout4")
+        self.search_btn4 = QPushButton(self.tab4)
+        self.search_btn4.setObjectName(u"search_btn4")
+
+        self.button_layout4.addWidget(self.search_btn4)
+
+        self.prev_btn4 = QPushButton(self.tab4)
+        self.prev_btn4.setObjectName(u"prev_btn4")
+
+        self.button_layout4.addWidget(self.prev_btn4)
+
+        self.next_btn4 = QPushButton(self.tab4)
+        self.next_btn4.setObjectName(u"next_btn4")
+
+        self.button_layout4.addWidget(self.next_btn4)
+
+        self.save_btn4 = QPushButton(self.tab4)
+        self.save_btn4.setObjectName(u"save_btn4")
+
+        self.button_layout4.addWidget(self.save_btn4)
+
+
+        self.tab4_layout.addLayout(self.button_layout4)
+
+        self.stack.addWidget(self.tab4)
+        self.tab5 = QWidget()
+        self.tab5.setObjectName(u"tab5")
+        self.tab5_layout = QVBoxLayout(self.tab5)
+        self.tab5_layout.setObjectName(u"tab5_layout")
+        self.settings_title = QLabel(self.tab5)
         self.settings_title.setObjectName(u"settings_title")
 
-        self.tab4_layout.addWidget(self.settings_title)
+        self.tab5_layout.addWidget(self.settings_title)
 
-        self.php_group = QGroupBox(self.tab4)
+        self.php_group = QGroupBox(self.tab5)
         self.php_group.setObjectName(u"php_group")
         self.php_group_layout = QVBoxLayout(self.php_group)
         self.php_group_layout.setObjectName(u"php_group_layout")
@@ -696,9 +817,9 @@ class Ui_MainWindow(object):
         self.php_group_layout.addWidget(self.php_status_label)
 
 
-        self.tab4_layout.addWidget(self.php_group)
+        self.tab5_layout.addWidget(self.php_group)
 
-        self.model_group = QGroupBox(self.tab4)
+        self.model_group = QGroupBox(self.tab5)
         self.model_group.setObjectName(u"model_group")
         self.model_group_layout = QVBoxLayout(self.model_group)
         self.model_group_layout.setObjectName(u"model_group_layout")
@@ -728,9 +849,9 @@ class Ui_MainWindow(object):
         self.model_group_layout.addWidget(self.model_status_label)
 
 
-        self.tab4_layout.addWidget(self.model_group)
+        self.tab5_layout.addWidget(self.model_group)
 
-        self.page_limit_group = QGroupBox(self.tab4)
+        self.page_limit_group = QGroupBox(self.tab5)
         self.page_limit_group.setObjectName(u"page_limit_group")
         self.page_limit_layout = QVBoxLayout(self.page_limit_group)
         self.page_limit_layout.setObjectName(u"page_limit_layout")
@@ -759,9 +880,9 @@ class Ui_MainWindow(object):
         self.page_limit_layout.addLayout(self.page_limit_row)
 
 
-        self.tab4_layout.addWidget(self.page_limit_group)
+        self.tab5_layout.addWidget(self.page_limit_group)
 
-        self.bg_group = QGroupBox(self.tab4)
+        self.bg_group = QGroupBox(self.tab5)
         self.bg_group.setObjectName(u"bg_group")
         self.bg_layout = QVBoxLayout(self.bg_group)
         self.bg_layout.setObjectName(u"bg_layout")
@@ -828,9 +949,9 @@ class Ui_MainWindow(object):
         self.bg_layout.addWidget(self.bg_status_label)
 
 
-        self.tab4_layout.addWidget(self.bg_group)
+        self.tab5_layout.addWidget(self.bg_group)
 
-        self.cache_group = QGroupBox(self.tab4)
+        self.cache_group = QGroupBox(self.tab5)
         self.cache_group.setObjectName(u"cache_group")
         self.cache_layout = QHBoxLayout(self.cache_group)
         self.cache_layout.setObjectName(u"cache_layout")
@@ -854,13 +975,13 @@ class Ui_MainWindow(object):
         self.cache_layout.addWidget(self.clear_cache_btn)
 
 
-        self.tab4_layout.addWidget(self.cache_group)
+        self.tab5_layout.addWidget(self.cache_group)
 
-        self.tab4_spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+        self.tab5_spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
-        self.tab4_layout.addItem(self.tab4_spacer)
+        self.tab5_layout.addItem(self.tab5_spacer)
 
-        self.stack.addWidget(self.tab4)
+        self.stack.addWidget(self.tab5)
 
         self.body_layout.addWidget(self.stack)
 
@@ -893,7 +1014,8 @@ class Ui_MainWindow(object):
         self.tab_btn1.setText(QCoreApplication.translate("MainWindow", u"\u7b5b\u9009\u5668", None))
         self.tab_btn2.setText(QCoreApplication.translate("MainWindow", u"\u7eb3\u897f\u59b2", None))
         self.tab_btn3.setText(QCoreApplication.translate("MainWindow", u"\u4f5c\u8005\u4f5c\u54c1", None))
-        self.tab_btn4.setText(QCoreApplication.translate("MainWindow", u"\u8bbe\u7f6e", None))
+        self.tab_btn4.setText(QCoreApplication.translate("MainWindow", u"PID", None))
+        self.tab_btn5.setText(QCoreApplication.translate("MainWindow", u"\u8bbe\u7f6e", None))
         self.search_group1.setTitle("")
         self.label_keywords.setText(QCoreApplication.translate("MainWindow", u"\u641c\u7d22\u5173\u952e\u8bcd:", None))
         self.label_filter.setText(QCoreApplication.translate("MainWindow", u"\u5185\u5bb9\u8fc7\u6ee4:", None))
@@ -958,6 +1080,16 @@ class Ui_MainWindow(object):
         self.prev_btn3.setText(QCoreApplication.translate("MainWindow", u"\u2b05 \u4e0a\u4e00\u5f20", None))
         self.next_btn3.setText(QCoreApplication.translate("MainWindow", u"\u4e0b\u4e00\u5f20 \u27a1", None))
         self.save_btn3.setText(QCoreApplication.translate("MainWindow", u"\u2705 \u4fdd\u5b58", None))
+        self.search_group4.setTitle("")
+        self.label_pid.setText(QCoreApplication.translate("MainWindow", u"\u4f5c\u54c1ID:", None))
+        self.image_label4.setText("")
+        self.filename_label4.setText("")
+        self.info_group4.setTitle("")
+        self.stop_btn4.setText(QCoreApplication.translate("MainWindow", u"\u23f9 \u505c\u6b62", None))
+        self.search_btn4.setText(QCoreApplication.translate("MainWindow", u"\U0001f50d \U0000641c\U00007d22", None))
+        self.prev_btn4.setText(QCoreApplication.translate("MainWindow", u"\u2b05 \u4e0a\u4e00\u5f20", None))
+        self.next_btn4.setText(QCoreApplication.translate("MainWindow", u"\u4e0b\u4e00\u5f20 \u27a1", None))
+        self.save_btn4.setText(QCoreApplication.translate("MainWindow", u"\u2705 \u4fdd\u5b58", None))
         self.settings_title.setText(QCoreApplication.translate("MainWindow", u"\u2699 \u8bbe\u7f6e", None))
         self.php_group.setTitle("")
         self.label_php.setText(QCoreApplication.translate("MainWindow", u"PHPSESSID:", None))

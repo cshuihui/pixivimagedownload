@@ -5,6 +5,7 @@ workers/search_worker.py — 关键词/作者搜索并下载预览图的后台�
 从原 test_app.py 拆出：
 - SearchWorker（关键词搜索下载，Tab1/Tab2 共用）
 - AuthorSearchWorker（按作者 ID 搜索下载，Tab3 用）
+- PidSearchWorker（按作品 PID 搜索下载，Tab4 用；按用户要求不做任何过滤）
 
 ⚠️ 第一阶段仅做代码拆分，逻辑与原 test_app.py 保持一致。
 """
@@ -314,5 +315,97 @@ class AuthorSearchWorker(QObject):
 
             if not self.stop_event.is_set():
                 self.finished.emit(result, user_name)
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class PidSearchWorker(QObject):
+    """按作品 PID 搜索：定位该作品并下载它的全部预览图
+
+    设计取舍（按用户要求）：PID 页不做任何过滤——输入哪个 PID 就下哪个，
+    既不判断 R18 / R18G 标记，也不查「pid屏蔽」黑名单。
+    另外这里只有一个作品，所以没有「PID 个数」限制，也没有模型识别。
+    """
+    finished = Signal(list)   # (image_paths,)
+    image_ready = Signal(str)
+    log_msg = Signal(str)
+    error = Signal(str)
+
+    def __init__(self, pid, php):
+        super().__init__()
+        self.pid = str(pid).strip()
+        self.php = php
+        self.stop_event = threading.Event()
+        self.pause_event = threading.Event()
+
+    def log(self, msg):
+        print(msg)
+        self.log_msg.emit(msg)
+
+    def check_pause(self):
+        """检查暂停状态，暂停时阻塞直到恢复或收到停止信号"""
+        while self.pause_event.is_set() and not self.stop_event.is_set():
+            time.sleep(0.2)
+
+    @Slot()
+    def run(self):
+        try:
+            os.makedirs(config_logic.temp_dir, exist_ok=True)
+            result = []
+            pid = self.pid
+
+            self.log(f"正在获取 PID {pid} 的作品信息...")
+            pid_links = None
+            for retry in range(1, 6):
+                if self.stop_event.is_set():
+                    break
+                try:
+                    pid_links = link_find(self.php, pid)
+                    break
+                except Exception as e:
+                    wait = 5 * retry
+                    self.log(f"{pid} 连接异常(第{retry}次)，{wait}秒后重试: {e}")
+                    time.sleep(wait)
+            if pid_links is None:
+                if not self.stop_event.is_set():
+                    self.log(f"{pid} 获取失败")
+                    self.finished.emit(result)
+                return
+
+            sub_dir = os.path.join(config_logic.temp_dir, pid)
+            os.makedirs(sub_dir, exist_ok=True)
+
+            self.log(f"正在下载 PID {pid}，共 {pid_links['pageCount']} 张")
+            for pn in range(1, pid_links['pageCount'] + 1):
+                if self.stop_event.is_set():
+                    break
+                self.check_pause()
+                if self.stop_event.is_set():
+                    break
+                page_url = pid_links['links'][pn]['regular']
+                page_name = page_url.split('/')[-1]
+                self.log(page_name)
+                dl_ok = False
+                for retry in range(1, 6):
+                    if self.stop_event.is_set():
+                        break
+                    try:
+                        if link_to_image(sub_dir, page_name, page_url, self.php):
+                            dl_ok = True
+                            break
+                    except Exception as e:
+                        wait = 5 * retry
+                        self.log(f"  下载失败(第{retry}次)，{wait}秒后重试: {e}")
+                        time.sleep(wait)
+                if not dl_ok:
+                    self.log("  下载失败，跳过")
+                    break
+                full_path = os.path.abspath(os.path.join(sub_dir, page_name))
+                result.append(full_path)
+                self.image_ready.emit(full_path)
+                time.sleep(random.uniform(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
+
+            if not self.stop_event.is_set():
+                self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))

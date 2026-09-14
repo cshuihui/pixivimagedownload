@@ -19,7 +19,8 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect, QWidget
 )
 from PySide6.QtGui import (
-    QPixmap, QIcon, QShortcut, QKeySequence, QColor, QPainter, QPainterPath, QPen
+    QPixmap, QIcon, QShortcut, QKeySequence, QColor, QPainter, QPainterPath,
+    QPen, QRegion
 )
 from PySide6.QtCore import (
     Qt, QThread, QTimer, QEvent, QPoint, QPointF, QRect, QRectF, QSize
@@ -32,7 +33,7 @@ from pixiv_image_download import filename_extract_index
 
 from logic import config_logic
 from logic.image_logic import get_image, filename_split, pid_filter_add
-from workers.search_worker import SearchWorker, AuthorSearchWorker
+from workers.search_worker import SearchWorker, AuthorSearchWorker, PidSearchWorker
 from workers.save_worker import SaveWorker
 from workers.php_worker import GetPHPSESSIDWorker, CheckPHPSESSIDWorker
 
@@ -76,6 +77,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.current_index = 0
         self.current_index2 = 0
         self.current_index3 = 0
+        self.current_index4 = 0
 
         # 初始化线程变量
         self.search_worker = None
@@ -84,6 +86,8 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.search_thread2 = None
         self.search_worker3 = None
         self.search_thread3 = None
+        self.search_worker4 = None
+        self.search_thread4 = None
         self.save_worker = None
         self.save_thread = None
         self.save_worker2 = None
@@ -93,10 +97,12 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self._save_pid = None
         self._save_pid2 = None
         self._save_pid3 = None
+        self._save_pid4 = None
         # 暂停状态
         self._search_paused = False
         self._search_paused2 = False
         self._search_paused3 = False
+        self._search_paused4 = False
 
         # 保存线程池（允许并发保存）
         self._save_threads3 = []
@@ -105,6 +111,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.image_list_tab1 = []
         self.image_list_tab2 = []
         self.image_list_tab3 = []
+        self.image_list_tab4 = []
 
         # 背景图 / 子控件透明度（默认预设 1 背景图、透明度 20）
         self.background_image = config_logic.default_image
@@ -117,9 +124,11 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self._zoom1 = 0
         self._zoom2 = 0
         self._zoom3 = 0
+        self._zoom4 = 0
         self._pixmap1 = None
         self._pixmap2 = None
         self._pixmap3 = None
+        self._pixmap4 = None
 
         # 拖拽状态
         self._drag_pos = None
@@ -131,14 +140,17 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self._resize_start_geo = None
 
         # .ui 无法表达的细节：文件名叠加层不拦截鼠标；图片区左/右 = 5:1
-        for lbl in (self.filename_label, self.filename_label2, self.filename_label3):
+        for lbl in (self.filename_label, self.filename_label2, self.filename_label3,
+                    self.filename_label4):
             lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
         # 侧边栏 tab 文字加粗
-        for btn in (self.tab_btn1, self.tab_btn2, self.tab_btn3, self.tab_btn4):
+        for btn in (self.tab_btn1, self.tab_btn2, self.tab_btn3,
+                    self.tab_btn4, self.tab_btn5):
             f = btn.font()
             f.setBold(True)
             btn.setFont(f)
-        for layout in (self.content_layout1, self.content_layout2, self.content_layout3):
+        for layout in (self.content_layout1, self.content_layout2, self.content_layout3,
+                       self.content_layout4):
             layout.setStretch(0, 5)
             layout.setStretch(1, 1)
 
@@ -147,6 +159,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             (self.image_label, self.scroll_area),
             (self.image_label2, self.scroll_area2),
             (self.image_label3, self.scroll_area3),
+            (self.image_label4, self.scroll_area4),
         ):
             lbl.installEventFilter(self)
             scroll.viewport().installEventFilter(self)
@@ -174,6 +187,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.tab_btn2.clicked.connect(lambda: self.stack.setCurrentIndex(1))
         self.tab_btn3.clicked.connect(lambda: self.stack.setCurrentIndex(2))
         self.tab_btn4.clicked.connect(lambda: self.stack.setCurrentIndex(3))
+        self.tab_btn5.clicked.connect(lambda: self.stack.setCurrentIndex(4))
         self.stack.currentChanged.connect(self._on_tab_changed)
 
         # 自定义页眉（标题栏）：最小化 / 最大化-还原 / 关闭
@@ -212,6 +226,14 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.r18_checkbox3.stateChanged.connect(lambda: self._update_r18_state(3))
         self.r18g_checkbox3.stateChanged.connect(lambda: self._update_r18_state(3))
         self.r18_only_checkbox3.stateChanged.connect(lambda: self._update_r18_state(3))
+
+        # Tab4 (PID)
+        self.search_btn4.clicked.connect(self.on_search_clicked4)
+        self.prev_btn4.clicked.connect(self.on_prev_clicked4)
+        self.next_btn4.clicked.connect(self.on_next_clicked4)
+        self.save_btn4.clicked.connect(self.on_save_clicked4)
+        self.stop_btn4.clicked.connect(self._on_stop_clicked4)
+        # PID 页没有过滤选项，因此不接 R18 互斥逻辑
 
         # 设置页
         self.php_input_global.textChanged.connect(self._on_php_input_changed)
@@ -549,6 +571,20 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         if obj is getattr(self, 'card', None) and event.type() == QEvent.Type.Resize:
             self._update_bg_pixmap()
             return False
+
+        # 图片展示框尺寸变化 → 重算圆角遮罩（遮罩必须跟着尺寸走）
+        if event.type() == QEvent.Type.Resize and hasattr(self, 'scroll_area'):
+            for sa in self._image_scroll_areas():
+                if obj is sa.viewport():
+                    self._apply_rounded_mask(sa)
+                    self._apply_rounded_mask(sa.viewport())
+                    break
+
+        # 页眉：双击空白处 → 最大化 / 还原（与系统标题栏行为一致）
+        if obj is getattr(self, 'titlebar', None) and \
+                event.type() == QEvent.Type.MouseButtonDblClick:
+            self._toggle_max_restore()
+            return True
 
         # 滚轮缩放
         if event.type() == QEvent.Type.Wheel:
@@ -975,23 +1011,33 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         if not path or not os.path.exists(path):
             self._bg_pixmap = None
             self._bg_pixmap_path = None
+            self._bg_render_key = None
             lbl.clear()
             lbl.hide()
             return
         if getattr(self, '_bg_pixmap_path', None) != path:
             self._bg_pixmap = QPixmap(path)
             self._bg_pixmap_path = path
+            self._bg_render_key = None      # 换了图片文件，必须重绘
         if self._bg_pixmap is None or self._bg_pixmap.isNull():
+            self._bg_render_key = None
             lbl.hide()
             return
         size = self.card.size()
         if size.width() <= 1 or size.height() <= 1:
             return
+
+        # 尺寸 / 圆角都没变就跳过重绘：本函数会被窗口拖动缩放高频触发，
+        # 每次都做一遍 SmoothTransformation 缩放开销很大（保持幂等）
+        radius = 0 if self._maximized_custom else self._CARD_RADIUS
+        key = (size.width(), size.height(), radius)
+        if getattr(self, '_bg_render_key', None) == key:
+            return
+
         scaled = self._bg_pixmap.scaled(size, Qt.KeepAspectRatio,
                                         Qt.TransformationMode.SmoothTransformation)
 
         # 按卡片圆角裁切（子控件不受父级 border-radius 约束，必须自己裁）
-        radius = 0 if self._maximized_custom else self._CARD_RADIUS
         canvas = QPixmap(size)
         canvas.fill(Qt.GlobalColor.transparent)
         painter = QPainter(canvas)
@@ -1010,6 +1056,66 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         lbl.move(0, 0)
         lbl.lower()   # 保持在侧边栏 / 堆栈面板下方
         lbl.show()
+        self._bg_render_key = key   # 记录本次渲染尺寸，重复调用直接跳过
+
+    # ==================== 图片展示框（圆角 / 角标文案） ====================
+    _IMG_BOX_RADIUS = 8
+
+    def _image_scroll_areas(self):
+        """四个 Tab 的图片展示框（QScrollArea）"""
+        return (self.scroll_area, self.scroll_area2,
+                self.scroll_area3, self.scroll_area4)
+
+    def _apply_rounded_mask(self, widget):
+        """给控件套圆角遮罩
+
+        QSS 的 border-radius 只影响边框绘制，并不会裁剪子控件（图片会从
+        圆角外露出来），所以这里显式用 QRegion 做遮罩；尺寸变化时必须重算。
+        """
+        size = widget.size()
+        if size.width() <= 1 or size.height() <= 1:
+            return
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, size.width(), size.height()),
+                            self._IMG_BOX_RADIUS, self._IMG_BOX_RADIUS)
+        widget.setMask(QRegion(path.toFillPolygon().toPolygon()))
+
+    def _filename_label_of(self, image_label):
+        """图片 label → 同 Tab 的文件名角标 label"""
+        if image_label is self.image_label:
+            return self.filename_label
+        if image_label is self.image_label2:
+            return self.filename_label2
+        if image_label is self.image_label3:
+            return self.filename_label3
+        if image_label is self.image_label4:
+            return self.filename_label4
+        return None
+
+    @staticmethod
+    def _format_filename(path, total, index):
+        """角标文案：文件名 + 「, 序号/总数」（序号从 1 开始）
+
+        例：136626738_p0, 3/12
+        """
+        fname = os.path.basename(path)
+        pid = filename_split(fname)
+        idx = filename_extract_index(fname)
+        name = f"{pid}_p{idx}" if idx else pid
+        if index is not None and total and 0 <= index < total:
+            return f"{name}, {index + 1}/{total}"
+        return name
+
+    def _refresh_filename_count(self, tab):
+        """预览图数量变化时只刷新角标文字（不重渲染图片，避免重复缩放开销）"""
+        ctx = self._tab_ctx(tab)
+        idx = getattr(self, ctx.index_attr)
+        if not ctx.image_list or not (0 <= idx < len(ctx.image_list)):
+            return
+        lbl = self._filename_label_of(ctx.label)
+        if lbl is not None:
+            lbl.setText(self._format_filename(ctx.image_list[idx],
+                                              len(ctx.image_list), idx))
 
     def _apply_appearance(self):
         """背景图（等比不拉伸）+ 子控件背景（白色 + 透明度）。
@@ -1025,7 +1131,8 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         alpha = 1.0 - (self.ui_transparency / 100.0)
         qss = (
             "QStackedWidget#stack { background: transparent; }\n"
-            "QWidget#tab1, QWidget#tab2, QWidget#tab3, QWidget#tab4 { background: transparent; }\n"
+            "QWidget#tab1, QWidget#tab2, QWidget#tab3, QWidget#tab4, "
+            "QWidget#tab5 { background: transparent; }\n"
             "QGroupBox {\n"
             "    border: 1px solid #808080;\n"
             "    border-radius: 8px;\n"
@@ -1037,12 +1144,14 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         # 图片显示区：背景也由透明度控制（白色画在边框以内），视口透明。
         # 边框原写在 main_window.ui 各 scroll_area 的 inline 样式里，现收敛到此处
         # 统一管理 —— 只有这里能同时写入随滑块变化的 alpha。
-        for sa in (self.scroll_area, self.scroll_area2, self.scroll_area3):
+        for sa in self._image_scroll_areas():
             sa.setStyleSheet(
                 f"QScrollArea {{ background-color: rgba(255, 255, 255, {alpha:.3f}); "
-                "border: 1px solid gray; }"
+                f"border: 1px solid gray; border-radius: {self._IMG_BOX_RADIUS}px; }}"
             )
             sa.viewport().setStyleSheet("background: transparent;")
+            self._apply_rounded_mask(sa)
+            self._apply_rounded_mask(sa.viewport())
 
     # ==================== Tab3 搜索 ====================
     # ==================== 多 Tab 通用逻辑（tab: 1/2/3） ====================
@@ -1065,6 +1174,15 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
                 image_list=self.image_list_tab2, model_cb=self.model_identify_checkbox2,
                 index_attr='current_index2', worker_attr='search_worker2',
                 thread_attr='search_thread2', paused_attr='_search_paused2',
+            )
+        if tab == 4:
+            return SimpleNamespace(
+                search_btn=self.search_btn4, save_btn=self.save_btn4,
+                prev_btn=self.prev_btn4, next_btn=self.next_btn4,
+                stop_btn=self.stop_btn4, info=self.info_box4, label=self.image_label4,
+                image_list=self.image_list_tab4, model_cb=None,
+                index_attr='current_index4', worker_attr='search_worker4',
+                thread_attr='search_thread4', paused_attr='_search_paused4',
             )
         return SimpleNamespace(
             search_btn=self.search_btn3, save_btn=self.save_btn3,
@@ -1161,6 +1279,9 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             ctx.save_btn.setEnabled(True)
             ctx.prev_btn.setEnabled(True)
             ctx.next_btn.setEnabled(True)
+        else:
+            # 总数变了：只刷角标的「序号/总数」，不重渲染图片
+            self._refresh_filename_count(tab)
 
     def _navigate(self, tab, delta, first_msg="已经是第一张啦~", last_msg="已经是最后一张啦~"):
         """上一张 / 下一张导航"""
@@ -1261,6 +1382,65 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
     def _on_stop_clicked3(self):
         self._stop_search(3)
 
+    # ==================== Tab4 搜索（按作品 PID） ====================
+    def on_search_clicked4(self):
+        """按作品 PID 搜索：下载该作品的全部预览图"""
+        if self._toggle_search_pause(4):
+            return
+
+        pid = self.pid_input.text().strip()
+        if not pid:
+            QMessageBox.warning(self, "警告", "请输入作品ID(PID)")
+            return
+
+        php = self.php_input_global.text()
+        self.php_session = php
+
+        self.image_list_tab4.clear()
+        self.image_label4.setPixmap(QPixmap())
+        self.image_label4.setText("搜索中...")
+        self.image_label4.repaint()
+        QApplication.processEvents()
+        self.info_box4.clear()
+
+        self.search_btn4.setEnabled(True)
+        self.search_btn4.setText("搜索中...")
+        self.save_btn4.setEnabled(False)
+        self.prev_btn4.setEnabled(False)
+        self.next_btn4.setEnabled(False)
+        self.stop_btn4.setVisible(True)
+        self._search_paused4 = False
+
+        # PID 页按用户要求不做任何过滤：输入哪个 PID 就下哪个
+        self.search_worker4 = PidSearchWorker(pid, php)
+        self.search_thread4 = QThread()
+        self.search_worker4.moveToThread(self.search_thread4)
+
+        self.search_worker4.finished.connect(self._on_search_done4)
+        self.search_worker4.image_ready.connect(self._on_image_ready4)
+        self.search_worker4.log_msg.connect(self.info_box4.append)
+        self.search_worker4.error.connect(self._on_search_error4)
+        self.search_thread4.started.connect(self.search_worker4.run)
+        self.search_worker4.finished.connect(self.search_thread4.quit)
+        self.search_worker4.error.connect(self.search_thread4.quit)
+
+        self.search_thread4.start()
+
+    def _on_search_done4(self, result):
+        self._finish_search(4)
+        if self.image_list_tab4:
+            self.show_toast(f"✅ 下载完毕！共 {len(self.image_list_tab4)} 张图片",
+                            "success", 3000)
+
+    def _on_image_ready4(self, path):
+        self._add_image_ready(4, path)
+
+    def _on_search_error4(self, msg):
+        self._search_failed(4, msg)
+
+    def _on_stop_clicked4(self):
+        self._stop_search(4)
+
     # ==================== Tab3 导航 ====================
     def on_prev_clicked3(self):
         self._navigate(3, -1)
@@ -1268,20 +1448,27 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
     def on_next_clicked3(self):
         self._navigate(3, 1)
 
+    # ==================== Tab4 导航 ====================
+    def on_prev_clicked4(self):
+        self._navigate(4, -1, "已是第一张", "已是最后一张")
+
+    def on_next_clicked4(self):
+        self._navigate(4, 1, "已是第一张", "已是最后一张")
+
     def _on_tab_changed(self, index):
         """切换标签时更新侧边栏按钮选中态
 
         样式本身写在 ui/app.qss（#tab_btnN[active="true"]），这里只翻转动态属性，
         避免为「选中 / 未选中」各维护一份手写样式。
         """
-        for i, btn in enumerate((self.tab_btn1, self.tab_btn2,
-                                 self.tab_btn3, self.tab_btn4)):
+        for i, btn in enumerate((self.tab_btn1, self.tab_btn2, self.tab_btn3,
+                                 self.tab_btn4, self.tab_btn5)):
             btn.setProperty("active", "true" if i == index else "false")
             btn.style().unpolish(btn)
             btn.style().polish(btn)
 
-        # 进入设置页时刷新缓存大小
-        if index == 3:
+        # 进入设置页时刷新缓存大小（设置页现在是第 5 个，索引 4）
+        if index == 4:
             self._update_cache_size()
 
         # 切换到对应的 tab 时重新自适应展示
@@ -1297,6 +1484,10 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             QTimer.singleShot(0, lambda: self.update_image_display(label=self.image_label3))
         elif index == 2 and self._pixmap3 is not None:
             QTimer.singleShot(0, lambda: self._apply_zoom(self.image_label3, self._zoom3))
+        elif index == 3 and self._pixmap4 is None:
+            QTimer.singleShot(0, lambda: self.update_image_display(label=self.image_label4))
+        elif index == 3 and self._pixmap4 is not None:
+            QTimer.singleShot(0, lambda: self._apply_zoom(self.image_label4, self._zoom4))
 
     # ==================== 自定义页眉：最小化 / 最大化 / 关闭 ====================
     # 图标逻辑尺寸（按钮 44x30，字形 16x16 视觉最舒服）
@@ -1434,9 +1625,12 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         elif label is self.image_label2:
             il = self.image_list_tab2
             filename_lbl = self.filename_label2
-        else:
+        elif label is self.image_label3:
             il = self.image_list_tab3
             filename_lbl = self.filename_label3
+        else:
+            il = self.image_list_tab4
+            filename_lbl = self.filename_label4
 
         if index is None:
             # 无默认图：清空为空白，让背景图透出
@@ -1447,8 +1641,10 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
                 self._pixmap1 = None
             elif label is self.image_label2:
                 self._pixmap2 = None
-            else:
+            elif label is self.image_label3:
                 self._pixmap3 = None
+            else:
+                self._pixmap4 = None
             return
         else:
             image_path = get_image(il, index)
@@ -1464,15 +1660,14 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             elif label is self.image_label2:
                 self._pixmap2 = pixmap
                 zoom = self._zoom2
-            else:
+            elif label is self.image_label3:
                 self._pixmap3 = pixmap
                 zoom = self._zoom3
+            else:
+                self._pixmap4 = pixmap
+                zoom = self._zoom4
             self._apply_zoom(label, zoom)
-            fname = os.path.basename(image_path)
-            pid = filename_split(fname)
-            idx = filename_extract_index(fname)
-            display_name = f"{pid}_p{idx}" if idx else pid
-            filename_lbl.setText(display_name)
+            filename_lbl.setText(self._format_filename(image_path, len(il), index))
         else:
             label.setText(f"图片不存在: {image_path}")
             filename_lbl.clear()
@@ -1485,9 +1680,12 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         elif label is self.image_label2:
             pixmap = self._pixmap2
             scroll = self.scroll_area2
-        else:
+        elif label is self.image_label3:
             pixmap = self._pixmap3
             scroll = self.scroll_area3
+        else:
+            pixmap = self._pixmap4
+            scroll = self.scroll_area4
         if pixmap is None or pixmap.isNull():
             return
         # 获取滚动区域视口尺寸（图片实际可显示区域）
@@ -1507,7 +1705,8 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
 
     def _on_wheel(self, event, tab):
         """滚轮缩放"""
-        zoom = self._zoom1 if tab == 1 else (self._zoom2 if tab == 2 else self._zoom3)
+        zoom = {1: self._zoom1, 2: self._zoom2,
+                3: self._zoom3, 4: self._zoom4}.get(tab, self._zoom1)
         if zoom == 0:
             zoom = 1.0
         if event.angleDelta().y() > 0:
@@ -1521,9 +1720,12 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         elif tab == 2:
             self._zoom2 = zoom
             label = self.image_label2
-        else:
+        elif tab == 3:
             self._zoom3 = zoom
             label = self.image_label3
+        else:
+            self._zoom4 = zoom
+            label = self.image_label4
         self._apply_zoom(label, zoom)
 
     def resizeEvent(self, event):
@@ -1537,6 +1739,8 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             self._apply_zoom(self.image_label2, self._zoom2)
         if hasattr(self, 'image_label3') and self._pixmap3:
             self._apply_zoom(self.image_label3, self._zoom3)
+        if hasattr(self, 'image_label4') and self._pixmap4:
+            self._apply_zoom(self.image_label4, self._zoom4)
 
     # ==================== Tab1 搜索 ====================
     def on_search_clicked(self):
@@ -1760,7 +1964,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         except RuntimeError:
             pass
 
-    # ==================== 统一保存方法（Tab1/Tab2/Tab3 共用） ====================
+    # ==================== 统一保存方法（Tab1/Tab2/Tab3/Tab4 共用） ====================
     def _do_save(self, save_subdir, btn, pid_attr, filter_checkbox):
         """统一的保存逻辑
 
@@ -1768,7 +1972,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             save_subdir: 保存子目录 (saved/{关键词}/)
             btn: 对应的保存按钮 (save_btn / save_btn2 / save_btn3)
             pid_attr: 存储 pid 的属性名，如 '_save_pid'
-            filter_checkbox: pid 屏蔽复选框
+            filter_checkbox: pid 屏蔽复选框；传 None 表示该 Tab 没有此选项（如 PID 页）
         """
         # 确定当前 tab 的图片列表和索引
         if btn is self.save_btn:
@@ -1779,10 +1983,14 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             img_list = self.image_list_tab2
             idx = self.current_index2
             image_label = self.image_label2
-        else:
+        elif btn is self.save_btn3:
             img_list = self.image_list_tab3
             idx = self.current_index3
             image_label = self.image_label3
+        else:
+            img_list = self.image_list_tab4
+            idx = self.current_index4
+            image_label = self.image_label4
 
         if not (0 <= idx < len(img_list)):
             QMessageBox.warning(self, "警告", "没有有效的图片可保存")
@@ -1844,7 +2052,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         """保存成功通用回调"""
         worker = self.sender()
         self._saving_paths.discard(worker._img_path)
-        if worker._filter_checkbox.isChecked():
+        if worker._filter_checkbox is not None and worker._filter_checkbox.isChecked():
             pid_filter_add(getattr(self, worker._pid_attr), True)
         self._update_btn_by_worker(worker)
         self.show_toast("✅ 保存成功", "success")
@@ -1869,8 +2077,10 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             self._update_save_btn_state(self.image_list_tab1, self.current_index, self.save_btn)
         elif worker._btn is self.save_btn2:
             self._update_save_btn_state(self.image_list_tab2, self.current_index2, self.save_btn2)
-        else:
+        elif worker._btn is self.save_btn3:
             self._update_save_btn_state(self.image_list_tab3, self.current_index3, self.save_btn3)
+        else:
+            self._update_save_btn_state(self.image_list_tab4, self.current_index4, self.save_btn4)
 
     def on_save_clicked(self):
         """Tab1 保存"""
@@ -1901,6 +2111,15 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             self.pid_filter_checkbox3
         )
 
+    def on_save_clicked4(self):
+        """Tab4(PID) 保存：以 PID 作为保存目录（无 pid 屏蔽勾选框，传 None）"""
+        pid = self.pid_input.text().strip() or 'PID'
+        self._do_save(
+            os.path.join(config_logic.save_dir, pid),
+            self.save_btn4, '_save_pid4',
+            None
+        )
+
     # ==================== 导航：上一张 / 下一张 ====================
     def on_prev_clicked(self):
         self._navigate(1, -1)
@@ -1924,6 +2143,8 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             self.on_prev_clicked2()
         elif tab == 2:
             self.on_prev_clicked3()
+        elif tab == 3:
+            self.on_prev_clicked4()
 
     def _on_shortcut_next(self):
         """全局快捷键：→ 下一张"""
@@ -1934,12 +2155,15 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             self.on_next_clicked2()
         elif tab == 2:
             self.on_next_clicked3()
+        elif tab == 3:
+            self.on_next_clicked4()
 
     # ==================== 资源清理 ====================
     def closeEvent(self, event):
         """窗口关闭时清理线程"""
         # 先通知所有 worker 停止
-        for worker in [self.search_worker, self.search_worker2, self.search_worker3]:
+        for worker in [self.search_worker, self.search_worker2,
+                       self.search_worker3, self.search_worker4]:
             if worker:
                 worker.stop_event.set()
 
@@ -1948,6 +2172,7 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             (self.search_thread, self.search_worker),
             (self.search_thread2, self.search_worker2),
             (self.search_thread3, self.search_worker3),
+            (self.search_thread4, self.search_worker4),
         ]
 
         for thread, worker in threads_to_quit:

@@ -11,6 +11,10 @@
      因此不在此文件重复定义，避免出现多个 owner 互相覆盖。
    - php_status_label / model_status_label / bg_status_label 的文字颜色由
      运行时按状态 setStyleSheet，此处只保留其内边距。
+
+   ⚠️ 下面的功能按钮是「按控件名逐个枚举」的（QSS 不支持 #btn* 这种前缀通配）。
+      新增 Tab 时，务必把新控件名补进对应颜色的那一组，否则按钮会退回 Qt 默认
+      外观，表现为「样式没有和其它 Tab 同步」。
    ========================================================================== */
 
 /* ---------- 卡片容器：圆角 + 不透明底（窗口本身透明） ---------- */
@@ -85,7 +89,7 @@
 
 /* ---------- 侧边栏 Tab 按钮 ---------- */
 /* 选中态由动态属性 active 驱动（见 _on_tab_changed），不是手写两份样式 */
-#tab_btn1, #tab_btn2, #tab_btn3, #tab_btn4 {
+#tab_btn1, #tab_btn2, #tab_btn3, #tab_btn4, #tab_btn5 {
     text-align: center;
     padding: 0px;
     border: none;
@@ -94,21 +98,23 @@
     font-size: 13px;
     background: rgba(0, 0, 0, 25);
 }
-#tab_btn1:hover, #tab_btn2:hover, #tab_btn3:hover, #tab_btn4:hover {
+#tab_btn1:hover, #tab_btn2:hover, #tab_btn3:hover,
+#tab_btn4:hover, #tab_btn5:hover {
     background: rgba(0, 0, 0, 45);
 }
-#tab_btn1[active="true"], #tab_btn2[active="true"],
-#tab_btn3[active="true"], #tab_btn4[active="true"] {
+#tab_btn1[active="true"], #tab_btn2[active="true"], #tab_btn3[active="true"],
+#tab_btn4[active="true"], #tab_btn5[active="true"] {
     color: #222;
     background: rgba(0, 0, 0, 60);
 }
 #tab_btn1[active="true"]:hover, #tab_btn2[active="true"]:hover,
-#tab_btn3[active="true"]:hover, #tab_btn4[active="true"]:hover {
+#tab_btn3[active="true"]:hover, #tab_btn4[active="true"]:hover,
+#tab_btn5[active="true"]:hover {
     background: rgba(0, 0, 0, 80);
 }
 
 /* ---------- 文件名叠加角标 ---------- */
-#filename_label, #filename_label2, #filename_label3 {
+#filename_label, #filename_label2, #filename_label3, #filename_label4 {
     background-color: rgba(0, 0, 0, 150);
     color: white;
     padding: 2px 8px;
@@ -116,21 +122,28 @@
     font-size: 12px;
 }
 
-/* ---------- 功能按钮（三个 Tab 共用同一套配色） ---------- */
-#stop_btn, #stop_btn2, #stop_btn3 {
+/* ---------- 功能按钮（所有页面共用这四种颜色，新增 Tab 记得加控件名） ---------- */
+/* 危险 / 停止 */
+#stop_btn, #stop_btn2, #stop_btn3, #stop_btn4,
+#delete_bg_image_btn, #clear_cache_btn {
     background-color: #dc3545;
     color: white;
 }
-#search_btn, #search_btn2, #search_btn3 {
+/* 主操作 / 获取 */
+#search_btn, #search_btn2, #search_btn3, #search_btn4,
+#get_php_btn, #set_bg_image_btn {
     background-color: #0084ff;
     color: white;
 }
-#prev_btn, #prev_btn2, #prev_btn3,
-#next_btn, #next_btn2, #next_btn3 {
+/* 次要操作 / 浏览 */
+#prev_btn, #prev_btn2, #prev_btn3, #prev_btn4,
+#next_btn, #next_btn2, #next_btn3, #next_btn4,
+#check_php_btn, #browse_model_btn, #browse_bg_image_btn {
     background-color: #6c757d;
     color: white;
 }
-#save_btn, #save_btn2, #save_btn3 {
+/* 保存 */
+#save_btn, #save_btn2, #save_btn3, #save_btn4 {
     background-color: #28a745;
     color: white;
 }

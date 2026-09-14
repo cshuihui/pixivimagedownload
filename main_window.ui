@@ -70,19 +70,19 @@
          </property>
          <layout class="QHBoxLayout" name="titlebar_layout">
           <property name="spacing">
-           <number>0</number>
+           <number>2</number>
           </property>
           <property name="leftMargin">
            <number>10</number>
           </property>
           <property name="topMargin">
-           <number>0</number>
+           <number>5</number>
           </property>
           <property name="rightMargin">
-           <number>0</number>
+           <number>6</number>
           </property>
           <property name="bottomMargin">
-           <number>0</number>
+           <number>5</number>
           </property>
           <item>
            <widget class="QLabel" name="app_icon">
@@ -130,18 +130,15 @@
            <widget class="QPushButton" name="min_btn">
             <property name="minimumSize">
              <size>
-              <width>45</width>
-              <height>38</height>
+              <width>34</width>
+              <height>28</height>
              </size>
             </property>
             <property name="maximumSize">
              <size>
-              <width>45</width>
-              <height>38</height>
+              <width>34</width>
+              <height>28</height>
              </size>
-            </property>
-            <property name="text">
-             <string>−</string>
             </property>
             <property name="toolTip">
              <string>最小化</string>
@@ -152,18 +149,15 @@
            <widget class="QPushButton" name="max_btn">
             <property name="minimumSize">
              <size>
-              <width>45</width>
-              <height>38</height>
+              <width>34</width>
+              <height>28</height>
              </size>
             </property>
             <property name="maximumSize">
              <size>
-              <width>45</width>
-              <height>38</height>
+              <width>34</width>
+              <height>28</height>
              </size>
-            </property>
-            <property name="text">
-             <string>□</string>
             </property>
             <property name="toolTip">
              <string>最大化</string>
@@ -174,18 +168,15 @@
            <widget class="QPushButton" name="close_btn">
             <property name="minimumSize">
              <size>
-              <width>45</width>
-              <height>38</height>
+              <width>34</width>
+              <height>28</height>
              </size>
             </property>
             <property name="maximumSize">
              <size>
-              <width>45</width>
-              <height>38</height>
+              <width>34</width>
+              <height>28</height>
              </size>
-            </property>
-            <property name="text">
-             <string>✕</string>
             </property>
             <property name="toolTip">
              <string>关闭</string>

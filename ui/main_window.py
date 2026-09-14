@@ -16,12 +16,14 @@ import shutil
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QLabel, QMessageBox, QFileDialog,
-    QGraphicsDropShadowEffect
+    QGraphicsDropShadowEffect, QWidget
 )
 from PySide6.QtGui import (
-    QPixmap, QIcon, QShortcut, QKeySequence, QColor, QPainter, QPainterPath
+    QPixmap, QIcon, QShortcut, QKeySequence, QColor, QPainter, QPainterPath, QPen
 )
-from PySide6.QtCore import Qt, QThread, QTimer, QEvent, QPoint, QRectF
+from PySide6.QtCore import (
+    Qt, QThread, QTimer, QEvent, QPoint, QPointF, QRect, QRectF, QSize
+)
 
 from types import SimpleNamespace
 
@@ -61,9 +63,14 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self._card_shadow.setOffset(0, 2)
         self._card_shadow.setColor(QColor(0, 0, 0, 80))
         self.card.setGraphicsEffect(self._card_shadow)
+        # 卡片尺寸变化时重算背景图（窗口 resizeEvent 触发时 card 还是旧尺寸，
+        # 必须等布局算完，因此监听 card 自己的 Resize 事件）
+        self.card.installEventFilter(self)
         # 自定义最大化状态（无边框窗口自行管理，铺满屏幕工作区）
         self._maximized_custom = False
         self._normal_geometry = None
+        # 页眉三颗按钮的图标：QPainter 自绘（比字形干净，且各 DPI 下都清晰）
+        self._setup_window_buttons()
         self.move(100, 100)
 
         self.current_index = 0
@@ -118,6 +125,10 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self._drag_pos = None
         # 无边框窗口的拖动状态
         self._win_drag_pos = None
+        # 无边框窗口的缩放状态（自己实现，不走系统缩放循环）
+        self._resize_edges = None
+        self._resize_origin = None
+        self._resize_start_geo = None
 
         # .ui 无法表达的细节：文件名叠加层不拦截鼠标；图片区左/右 = 5:1
         for lbl in (self.filename_label, self.filename_label2, self.filename_label3):
@@ -143,6 +154,8 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         # 信号接线 + 设置页初始化
         self._setup_signals()
         self._init_settings_page()
+        # 打开鼠标跟踪，否则鼠标靠近窗口边缘时收不到移动事件、不会变缩放光标
+        self._enable_hover_tracking()
 
         # 延迟到窗口显示后再加载默认图片，确保视口尺寸正确（自适应）
         QTimer.singleShot(0, self.update_image_display)
@@ -167,7 +180,6 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.min_btn.clicked.connect(self.showMinimized)
         self.max_btn.clicked.connect(self._toggle_max_restore)
         self.close_btn.clicked.connect(self.close)
-        self.titlebar.installEventFilter(self)   # 双击页眉 → 最大化/还原
 
         # Tab1
         self.search_btn.clicked.connect(self.on_search_clicked)
@@ -272,17 +284,22 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
     def _load_ui_config(self):
         """从 config/config.json 加载背景图、子控件透明度、PHPSESSID
 
-        首次运行（无配置文件）默认：背景图 = theme/default_image 的预设 1，透明度 = 20；
-        若配置里显式存了空字符串，表示用户主动选择了「无」，保持为空。
+        - 没有 background_image 键（首次运行）→ 用 theme/default_image 的预设 1；
+        - 显式存空字符串 → 用户主动选了「无」，保持为空；
+        - 存了路径 → 还原成绝对路径（项目换目录后按文件名自动找回），
+          若还原结果与存的不一致，顺手把 config 规范化写回。
         """
         cfg = config_logic.load_ui_config()
-        if 'background_image' in cfg:
-            bg = cfg.get('background_image') or ''
-            if bg and not os.path.exists(bg):
-                bg = ''
+        has_key = 'background_image' in cfg
+        stored = cfg.get('background_image') or ''
+        if not has_key:
+            bg = config_logic.default_image       # 首次运行
+        elif not stored:
+            bg = ''                               # 用户显式「无」
         else:
-            bg = config_logic.default_image
+            bg = config_logic.resolve_stored_path(stored)
         self.background_image = bg
+
         try:
             v = int(cfg.get('ui_transparency', 20))
         except (TypeError, ValueError):
@@ -290,10 +307,19 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.ui_transparency = max(0, min(100, v))
         self.phpsessid = cfg.get('phpsessid') or ''
 
+        # 旧配置里存的是绝对路径（换目录后会失效）→ 规范化写回，避免下次再丢
+        if has_key and bg and \
+                config_logic.to_stored_path(bg) != stored.replace('\\', '/'):
+            self._save_ui_config()
+
     def _save_ui_config(self):
-        """保存背景图、子控件透明度、PHPSESSID 到 config/config.json"""
+        """保存背景图、子控件透明度、PHPSESSID 到 config/config.json
+
+        背景图存相对路径（项目内的文件），保证换目录后仍能加载。
+        """
         config_logic.save_ui_config(
-            self.background_image, self.ui_transparency, getattr(self, 'phpsessid', '') or ''
+            config_logic.to_stored_path(self.background_image),
+            self.ui_transparency, getattr(self, 'phpsessid', '') or ''
         )
 
     # ==================== 样式表 / 卡片圆角与阴影 ====================
@@ -346,6 +372,10 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         m = self._RESIZE_MARGIN
         tl = self.card.mapTo(self, QPoint(0, 0))
         br = self.card.mapTo(self, QPoint(self.card.width(), self.card.height()))
+        # 卡片尺寸异常小（布局还没算完）时不判定热区，
+        # 否则任意位置都会落进 ±m 范围内，整条页眉都会被当成边缘
+        if br.x() - tl.x() <= 2 * m or br.y() - tl.y() <= 2 * m:
+            return None
         x, y = local_pos.x(), local_pos.y()
         left = x <= tl.x() + m
         right = x >= br.x() - m
@@ -373,45 +403,152 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         else:
             self.setCursor(Qt.CursorShape.SizeBDiagCursor)
 
+    def _in_titlebar(self, global_pos):
+        """该全局坐标是否落在页眉空白处（三颗按钮不算）"""
+        if getattr(self, 'titlebar', None) is None:
+            return False
+        pos = self.titlebar.mapFromGlobal(global_pos)
+        if not self.titlebar.rect().contains(pos):
+            return False
+        for btn in (self.min_btn, self.max_btn, self.close_btn):
+            if btn.geometry().contains(pos):
+                return False
+        return True
+
+    def _enable_hover_tracking(self):
+        """给窗口所有子控件打开鼠标跟踪
+
+        子控件默认不跟踪鼠标：没有按键的鼠标移动事件根本不会送到窗口，
+        「鼠标靠近窗口边缘 → 变成缩放光标」的提示就永远不会出现。
+        """
+        for w in [self] + self.findChildren(QWidget):
+            w.setMouseTracking(True)
+
+    def _begin_resize(self, edges, global_pos):
+        """开始缩放：记下起点与起始几何（自己实现，不用系统缩放循环）"""
+        self._resize_edges = edges
+        self._resize_origin = global_pos
+        self._resize_start_geo = self.geometry()
+
+    def _do_resize(self, global_pos):
+        """按当前鼠标位置更新窗口几何（左/上边靠移动 x/y 实现缩放）"""
+        if self._resize_edges is None or self._resize_start_geo is None:
+            return
+        geo = QRect(self._resize_start_geo)
+        dx = global_pos.x() - self._resize_origin.x()
+        dy = global_pos.y() - self._resize_origin.y()
+        min_size = self.minimumSizeHint()
+        min_w = max(self.minimumWidth(), min_size.width())
+        min_h = max(self.minimumHeight(), min_size.height())
+        if self._resize_edges & Qt.Edge.LeftEdge:
+            geo.setLeft(min(geo.left() + dx, geo.right() - min_w + 1))
+        elif self._resize_edges & Qt.Edge.RightEdge:
+            geo.setRight(max(geo.right() + dx, geo.left() + min_w - 1))
+        if self._resize_edges & Qt.Edge.TopEdge:
+            geo.setTop(min(geo.top() + dy, geo.bottom() - min_h + 1))
+        elif self._resize_edges & Qt.Edge.BottomEdge:
+            geo.setBottom(max(geo.bottom() + dy, geo.top() + min_h - 1))
+        self.setGeometry(geo)
+
+    def _reset_gestures(self):
+        """清空「拖动窗口 / 缩放窗口」状态
+
+        每次按下、松开、窗口失焦都调一次：即使上一次的松开事件因平台原因
+        （鼠标跑到窗口外、被别的程序抢走等）没送到，也不会留下残留状态
+        —— 否则下次按页眉拖窗口会被残留的缩放状态抢走，变成改窗口大小。
+        """
+        self._win_drag_pos = None
+        self._resize_edges = None
+        self._resize_origin = None
+        self._resize_start_geo = None
+
     def mousePressEvent(self, event):
-        """左键：窗口边缘 → 系统缩放；其它空白处 → 拖动整个窗口"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            # 最大化状态下拖动 → 先还原，再继续拖动
-            if self._maximized_custom:
-                self._toggle_max_restore()
-            pos = self.mapFromGlobal(event.globalPosition().toPoint())
-            edges = self._edge_at(pos)
+        """左键：窗口四条边/四角 → 缩放；页眉 → 拖动；其它地方不做任何改变"""
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+
+        gp = event.globalPosition().toPoint()
+        self._reset_gestures()      # 按下时先把上一次的手势状态清干净
+
+        # ① 四条边 / 四角 → 缩放（最大化时不处理）
+        if not self._maximized_custom:
+            edges = self._edge_at(self.mapFromGlobal(gp))
             if edges is not None:
-                handle = self.windowHandle()
-                if handle is not None:
-                    handle.startSystemResize(edges)
-                    event.accept()
-                    return
-            self._win_drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                self._begin_resize(edges, gp)
+                event.accept()
+                return
+
+        # ② 只有页眉能移动窗口
+        if not self._in_titlebar(gp):
+            super().mousePressEvent(event)
+            return
+
+        # ③ 最大化时页眉单击不做任何事：要还原请双击页眉或点 ❐ 按钮
+        if self._maximized_custom:
             event.accept()
             return
-        super().mousePressEvent(event)
+
+        self._win_drag_pos = gp - self.frameGeometry().topLeft()
+        event.accept()
+
+    def mouseDoubleClickEvent(self, event):
+        """双击页眉 → 最大化 / 还原（与系统标题栏行为一致）
+
+        不用 titlebar 的事件过滤器：窗口拖动会 accept 页眉上的按下并持有
+        隐式鼠标抓取，Qt 会把随后的双击发给窗口本身，过滤器收不到。
+        """
+        if event.button() == Qt.MouseButton.LeftButton and \
+                self._in_titlebar(event.globalPosition().toPoint()):
+            self._reset_gestures()       # 双击不当作拖动 / 缩放
+            self._toggle_max_restore()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self._win_drag_pos is not None and (event.buttons() & Qt.MouseButton.LeftButton):
-            self.move(event.globalPosition().toPoint() - self._win_drag_pos)
+        gp = event.globalPosition().toPoint()
+        held = bool(event.buttons() & Qt.MouseButton.LeftButton)
+
+        # 没有按住左键：手势结束（顺便兼容“松开事件丢了”的情况）
+        if not held:
+            if self._resize_edges is not None or self._win_drag_pos is not None:
+                self._reset_gestures()
+            self._update_resize_cursor(self.mapFromGlobal(gp))
+            super().mouseMoveEvent(event)
+            return
+
+        # 缩放中
+        if self._resize_edges is not None and self._resize_start_geo is not None:
+            self._do_resize(gp)
             event.accept()
             return
-        if not event.buttons():
-            self._update_resize_cursor(self.mapFromGlobal(event.globalPosition().toPoint()))
+        # 拖动中（仅页眉会进入这个状态）
+        if self._win_drag_pos is not None:
+            self.move(gp - self._win_drag_pos)
+            event.accept()
+            return
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self._win_drag_pos = None
+            # 松开时不再做任何几何操作（避免窗口莫名位移）
+            self._reset_gestures()
         super().mouseReleaseEvent(event)
 
+    def changeEvent(self, event):
+        """窗口失活（Alt+Tab / 点到别的程序）时结束手势，避免状态残留"""
+        if event.type() == QEvent.Type.ActivationChange and \
+                not self.isActiveWindow() and hasattr(self, '_resize_edges'):
+            self._reset_gestures()
+        super().changeEvent(event)
+
     def eventFilter(self, obj, event):
-        # 页眉：双击空白处 → 最大化 / 还原（与系统标题栏行为一致）
-        if obj is getattr(self, 'titlebar', None) and \
-                event.type() == QEvent.Type.MouseButtonDblClick:
-            self._toggle_max_restore()
-            return True
+        # 卡片尺寸变化（首帧 / 缩放 / 最大化）→ 重算背景图。
+        # 窗口 resizeEvent 触发时 card 的几何还没被布局更新，必须等这之后。
+        if obj is getattr(self, 'card', None) and event.type() == QEvent.Type.Resize:
+            self._update_bg_pixmap()
+            return False
 
         # 滚轮缩放
         if event.type() == QEvent.Type.Wheel:
@@ -425,47 +562,54 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
                 self._on_wheel(event, 3)
                 return True
 
-        # 鼠标拖拽移动图片
-        if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
-            if obj in (self.image_label, self.scroll_area.viewport()):
-                label, scroll = self.image_label, self.scroll_area
-            elif obj in (self.image_label2, self.scroll_area2.viewport()):
-                label, scroll = self.image_label2, self.scroll_area2
-            elif obj in (self.image_label3, self.scroll_area3.viewport()):
-                label, scroll = self.image_label3, self.scroll_area3
-            else:
-                label = None
-            if label:
+        # 鼠标拖拽平移图片
+        # 注意：这里必须用「左键是否按住」来判定，不能只看 _drag_pos 是否非空 ——
+        # 现在窗口开了鼠标跟踪（为了让边缘出缩放光标），没有按键的移动事件也会
+        # 送到过滤器；若残留了 _drag_pos，图片就会一直跟着鼠标跑。
+        if event.type() == QEvent.Type.MouseButtonPress and \
+                event.button() == Qt.MouseButton.LeftButton:
+            pair = self._image_area_of(obj)
+            if pair is not None:
+                scroll, _label = pair
                 scroll.setCursor(Qt.CursorShape.ClosedHandCursor)
                 self._drag_pos = event.globalPosition().toPoint()
                 return True
 
-        if event.type() == QEvent.Type.MouseMove and self._drag_pos is not None:
-            if obj in (self.image_label, self.scroll_area.viewport()):
-                label, scroll = self.image_label, self.scroll_area
-            elif obj in (self.image_label2, self.scroll_area2.viewport()):
-                label, scroll = self.image_label2, self.scroll_area2
-            elif obj in (self.image_label3, self.scroll_area3.viewport()):
-                label, scroll = self.image_label3, self.scroll_area3
-            else:
-                label = None
-            if label:
-                delta = event.globalPosition().toPoint() - self._drag_pos
-                self._drag_pos = event.globalPosition().toPoint()
-                h_bar = scroll.horizontalScrollBar()
-                v_bar = scroll.verticalScrollBar()
-                h_bar.setValue(h_bar.value() - delta.x())
-                v_bar.setValue(v_bar.value() - delta.y())
-                return True
+        if event.type() == QEvent.Type.MouseMove:
+            held = bool(event.buttons() & Qt.MouseButton.LeftButton)
+            if self._drag_pos is not None and not held:
+                self._drag_pos = None       # 没按住就结束平移（兼容松开事件丢失）
+            elif self._drag_pos is not None:
+                pair = self._image_area_of(obj)
+                if pair is not None:
+                    scroll, _label = pair
+                    delta = event.globalPosition().toPoint() - self._drag_pos
+                    self._drag_pos = event.globalPosition().toPoint()
+                    h_bar = scroll.horizontalScrollBar()
+                    v_bar = scroll.verticalScrollBar()
+                    h_bar.setValue(h_bar.value() - delta.x())
+                    v_bar.setValue(v_bar.value() - delta.y())
+                    return True
 
-        if event.type() == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton:
-                if obj in (self.image_label, self.scroll_area.viewport()):
-                    self.scroll_area.setCursor(Qt.CursorShape.ArrowCursor)
-                elif obj in (self.image_label2, self.scroll_area2.viewport()):
-                    self.scroll_area2.setCursor(Qt.CursorShape.ArrowCursor)
-                return True
+        if event.type() == QEvent.Type.MouseButtonRelease and \
+                event.button() == Qt.MouseButton.LeftButton:
+            pair = self._image_area_of(obj)
+            if pair is not None:
+                scroll, _label = pair
+                scroll.setCursor(Qt.CursorShape.ArrowCursor)
+            self._drag_pos = None          # 关键：松开一定要清掉，否则图片会跟着鼠标
+            return True
 
         return super().eventFilter(obj, event)
+
+    def _image_area_of(self, obj):
+        """obj 属于哪个图片显示区 → (scroll, label)；都不属于返回 None"""
+        for scroll, label in ((self.scroll_area, self.image_label),
+                              (self.scroll_area2, self.image_label2),
+                              (self.scroll_area3, self.image_label3)):
+            if obj is label or obj is scroll.viewport():
+                return scroll, label
+        return None
 
     # ==================== Tab3：作者作品 ====================
     def _on_php_input_changed(self):
@@ -1155,6 +1299,81 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             QTimer.singleShot(0, lambda: self._apply_zoom(self.image_label3, self._zoom3))
 
     # ==================== 自定义页眉：最小化 / 最大化 / 关闭 ====================
+    # 图标逻辑尺寸（按钮 44x30，字形 16x16 视觉最舒服）
+    _WIN_ICON_SIZE = 16
+    # 三颗按钮尺寸 + 页眉内边距：都在代码里设定，.ui 文件暂不修改
+    # （页眉高 38，上下各留 4 → 4 + 30 + 4 = 38 正好装下）
+    _WIN_BTN_W = 44
+    _WIN_BTN_H = 30
+    _TITLEBAR_MARGINS = (10, 4, 6, 4)   # 左, 上, 右, 下
+
+    def _make_win_glyph(self, kind, color, size=None, dpr=1.0):
+        """用 QPainter 画一个页眉按钮字形，返回 QPixmap。
+
+        kind: min（横线）/ max（方框）/ restore（双框）/ close（叉）
+        """
+        s = float(size or self._WIN_ICON_SIZE)
+        pm = QPixmap(int(round(s * dpr)), int(round(s * dpr)))
+        pm.setDevicePixelRatio(dpr)
+        pm.fill(Qt.GlobalColor.transparent)
+
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        pen = QPen(QColor(color))
+        pen.setWidthF(1.25)
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+        p.setPen(pen)
+
+        m = s * 0.27                 # 四周留白
+        w = s - 2 * m
+        if kind == 'min':
+            y = round(s / 2 - 0.5) + 0.5      # 半像素对齐，横线更锐利
+            p.drawLine(QPointF(m, y), QPointF(s - m, y))
+        elif kind == 'max':
+            p.drawRect(QRectF(m, m, w, w))
+        elif kind == 'restore':
+            d = w * 0.42                      # 前后两个方框的错位量
+            p.drawRect(QRectF(m, m + d, w - d, w - d))
+            p.drawPolyline([QPointF(m + d, m), QPointF(s - m, m),
+                            QPointF(s - m, s - m - d)])
+        elif kind == 'close':
+            p.drawLine(QPointF(m, m), QPointF(s - m, s - m))
+            p.drawLine(QPointF(s - m, m), QPointF(m, s - m))
+        p.end()
+        return pm
+
+    def _build_win_icons(self):
+        """构建三颗按钮的 QIcon：正常灰 → 悬停加深（关闭键悬停变白）"""
+        icons = {}
+        for kind, hover in (('min', '#111111'), ('max', '#111111'),
+                            ('restore', '#111111'), ('close', '#ffffff')):
+            icon = QIcon()
+            for dpr in (1.0, 1.5, 2.0, 3.0):     # 多分辨率，适配缩放屏
+                icon.addPixmap(self._make_win_glyph(kind, '#555555', dpr=dpr))
+                icon.addPixmap(self._make_win_glyph(kind, hover, dpr=dpr),
+                               QIcon.Mode.Active)
+            icons[kind] = icon
+        return icons
+
+    def _setup_window_buttons(self):
+        """给页眉三颗按钮贴自绘图标（文字字形全部弃用）
+
+        按钮尺寸与页眉内边距都在这里用代码定：main_window.ui 暂不修改，
+        等界面定稿后再统一重写 .ui。
+        """
+        self._win_icons = self._build_win_icons()
+        icon_size = QSize(self._WIN_ICON_SIZE, self._WIN_ICON_SIZE)
+        for btn in (self.min_btn, self.max_btn, self.close_btn):
+            btn.setText('')
+            btn.setIconSize(icon_size)
+            btn.setFixedSize(self._WIN_BTN_W, self._WIN_BTN_H)
+        # 内边距跟着调，保证按钮四周都有留白（悬停底色不贴边）
+        self.titlebar_layout.setContentsMargins(*self._TITLEBAR_MARGINS)
+        self.min_btn.setIcon(self._win_icons['min'])
+        self.close_btn.setIcon(self._win_icons['close'])
+        self._sync_max_btn()
+
     def _toggle_max_restore(self):
         """最大化 / 还原（无边框窗口，铺满屏幕可用工作区）"""
         if self._maximized_custom:
@@ -1171,14 +1390,17 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self._sync_max_btn()
 
     def _sync_max_btn(self):
-        """切换最大化按钮的字形与提示"""
+        """切换最大化按钮的图标与提示（□ / ❐ 为自绘图标）"""
         if getattr(self, 'max_btn', None) is None:
             return
+        icons = getattr(self, '_win_icons', None)
+        if icons is None:
+            return
         if self._maximized_custom:
-            self.max_btn.setText('\u2750')   # ❐ 还原
+            self.max_btn.setIcon(icons['restore'])
             self.max_btn.setToolTip('还原')
         else:
-            self.max_btn.setText('\u25a1')   # □ 最大化
+            self.max_btn.setIcon(icons['max'])
             self.max_btn.setToolTip('最大化')
 
     def _set_app_icon(self):

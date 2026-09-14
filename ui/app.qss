@@ -52,29 +52,26 @@
     padding-left: 6px;
 }
 
-/* ---------- 窗口控制按钮（三个字形大小不同，保留各自字号） ---------- */
+/* ---------- 窗口控制按钮 ---------- */
+/* 字形由 ui/main_window.py 自绘（QIcon 的 Normal/Active 两态换色），
+   这里只管圆角背景。按钮尺寸 34x28 在 .ui 里设定，四周留白靠
+   titlebar_layout 的边距（上/下 5、右 6、间距 2），悬停底色不会贴到窗口边。 */
 #min_btn, #max_btn, #close_btn {
     border: none;
     background: transparent;
-    color: #444444;
+    border-radius: 6px;
 }
-#min_btn  { font-size: 15px; }
-#max_btn  { font-size: 13px; }
-#close_btn { font-size: 14px; }
 #min_btn:hover, #max_btn:hover {
     background: rgba(0, 0, 0, 35);
-    color: #000000;
 }
 #min_btn:pressed, #max_btn:pressed {
     background: rgba(0, 0, 0, 60);
 }
 #close_btn:hover {
     background: #E81123;
-    color: #ffffff;
 }
 #close_btn:pressed {
     background: #C10B1B;
-    color: #ffffff;
 }
 
 /* ---------- 侧边栏 ---------- */

@@ -50,6 +50,7 @@ def _find_default_image():
 
 
 # ==================== 路径 / 文件常量 ====================
+app_root = os.path.abspath(".")
 default_image = _find_default_image()
 pids_filter_dir = data_path('pids_filter.txt')
 temp_dir = 'temp'
@@ -58,6 +59,12 @@ model_dir = os.path.join(os.path.abspath("."), 'models')
 model_path = os.path.join(model_dir, 'nahida_cnn_best.onnx')
 config_dir = os.path.join(os.path.abspath("."), 'config')
 config_file = os.path.join(config_dir, 'config.json')
+
+# 背景图搜索目录（换目录/丢文件时按文件名找回）
+bg_search_dirs = (
+    os.path.join(app_root, 'theme', 'default_image'),
+    os.path.join(app_root, 'theme', 'added_image'),
+)
 
 
 # ==================== 启动初始化 ====================
@@ -75,6 +82,46 @@ if not os.path.exists(pids_filter_dir):
 
 # ==================== config/config.json 读写 ====================
 CONFIG_KEYS = ('background_image', 'ui_transparency', 'phpsessid')
+
+
+def to_stored_path(path):
+    """把路径转成写进 config 的可移植形式。
+
+    项目目录内的文件存相对路径（如 theme/default_image/1.jpg），
+    这样整个项目换盘符/换文件夹后依然有效；项目外的文件保持绝对路径。
+    """
+    if not path:
+        return ''
+    p = os.path.normpath(os.path.abspath(path))
+    try:
+        rel = os.path.relpath(p, app_root)
+    except ValueError:      # 跨盘符，无法求相对路径
+        return p
+    if rel == os.pardir or rel.startswith(os.pardir + os.sep):
+        return p
+    return rel.replace('\\', '/')
+
+
+def resolve_stored_path(value):
+    """把 config 里存的值还原成可用的绝对路径，找不到返回 ''。
+
+    依次尝试：原样（绝对路径）→ 相对项目根目录 → 同名文件（兼容旧配置里
+    换了位置而失效的绝对路径，例如项目从别的盘移过来）。
+    """
+    if not value:
+        return ''
+    if os.path.isabs(value) and os.path.exists(value):
+        return os.path.normpath(value)
+    cand = os.path.normpath(os.path.join(app_root, value))
+    if os.path.exists(cand):
+        return cand
+    base = os.path.basename(value.replace('\\', '/'))
+    if base:
+        for d in bg_search_dirs:
+            cand = os.path.normpath(os.path.join(d, base))
+            if os.path.exists(cand):
+                return cand
+    return ''
 
 
 def load_ui_config():

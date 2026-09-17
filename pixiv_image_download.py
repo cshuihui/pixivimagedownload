@@ -223,10 +223,14 @@ def image_download(name, phpsessid, r18_rem, r18g_rem, start_page=1, last_page=1
 
 
 if __name__ == "__main__":
+    # PHPSESSID 现在保存在 config/config.json（见 logic/config_logic.py）
+    from logic import config_logic
+    phpsessid = config_logic.phpsessid
+    if not phpsessid:
+        raise SystemExit("未配置 PHPSESSID：请先运行 main.py，在「设置」页填写后重试。")
+
     R18_rem = 0
     R18G_rem = 0
-    with open("phpsessid.txt", 'r') as f:
-        phpsessid = f.read()
     while 1:
         search_content, R18_rem, R18G_rem, start_page, last_page = user_input()
 

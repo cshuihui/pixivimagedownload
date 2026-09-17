@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-workers/search_worker.py — 关键词/作者搜索并下载预览图的后台任务
+workers/search_worker.py — 关键词/作者/PID 搜索并下载预览图的后台任务
 
-从原 test_app.py 拆出：
 - SearchWorker（关键词搜索下载，Tab1/Tab2 共用）
 - AuthorSearchWorker（按作者 ID 搜索下载，Tab3 用）
-- PidSearchWorker（按作品 PID 搜索下载，Tab4 用；按用户要求不做任何过滤）
-
-⚠️ 第一阶段仅做代码拆分，逻辑与原 test_app.py 保持一致。
+- PidSearchWorker（按作品 PID 搜索下载，Tab4 用；不做任何过滤）
 """
 
 import os

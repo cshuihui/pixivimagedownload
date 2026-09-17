@@ -2,14 +2,11 @@
 """
 logic/image_logic.py — 图片 / 文件名的纯业务逻辑 + PID 屏蔽列表
 
-从原 test_app.py「业务逻辑函数」一节拆出：
 - get_image / filename_split / last_im_process
 - pid_filter_add / skip_pid_filter（pids_filter.txt 读写）
 
 pids_filter_list 为本模块级可变列表，供 workers / UI 共享
-（通过「原地修改」保证各处看到同一份数据，行为与原全局变量一致）。
-
-⚠️ 第一阶段仅做代码拆分，逻辑与原 test_app.py 保持一致。
+（通过「原地修改」保证各处看到同一份数据）。
 """
 
 import os

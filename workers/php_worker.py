@@ -2,12 +2,9 @@
 """
 workers/php_worker.py — PHPSESSID 相关后台任务
 
-从原 test_app.py 拆出：
 - check_pixiv（PHP 连通性检测）
 - GetPHPSESSIDWorker（通过浏览器自动获取）
 - CheckPHPSESSIDWorker（异步检测）
-
-⚠️ 第一阶段仅做代码拆分，逻辑与原 test_app.py 保持一致。
 """
 
 import requests

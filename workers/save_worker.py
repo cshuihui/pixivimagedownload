@@ -2,9 +2,7 @@
 """
 workers/save_worker.py — 保存单张原图的后台任务
 
-从原 test_app.py 拆出：SaveWorker
-
-⚠️ 第一阶段仅做代码拆分，逻辑与原 test_app.py 保持一致。
+- SaveWorker（保存指定原图，并在 saved/ 下递归查重）
 """
 
 import os

@@ -2,15 +2,12 @@
 """
 logic/config_logic.py — 配置 / 路径 / 全局可变状态
 
-从原 test_app.py 顶部与配置相关代码拆出：
 - 资源/数据路径解析（resource_path / data_path）
 - 默认图片查找（default_image）
-- 各文件/目录常量（pids_filter / phpsessid / temp / saved / models / config）
-- 启动初始化：目录创建、默认文件复制、临时目录清理、PHPSESSID 读取
+- 各文件/目录常量（pids_filter / temp / saved / models / config）
+- 启动初始化：目录创建、默认文件复制
 - 可变全局状态：model_path
-- config/config.json 的读写
-
-⚠️ 第一阶段仅做代码拆分，行为与原 test_app.py 保持一致。
+- config/config.json 的读写（背景图 / 界面透明度 / PHPSESSID）
 """
 
 import os

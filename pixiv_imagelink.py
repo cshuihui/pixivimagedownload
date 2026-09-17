@@ -78,7 +78,11 @@ def link_find(phpsessid, pid):
 
 if __name__ == '__main__':
     import json
-    with open("phpsessid.txt", 'r') as f:
-        phpsessid = f.read()
+    # PHPSESSID 现在保存在 config/config.json（见 logic/config_logic.py）
+    from logic import config_logic
+    phpsessid = config_logic.phpsessid
+    if not phpsessid:
+        raise SystemExit("未配置 PHPSESSID：请先运行 main.py，在「设置」页填写后重试。")
+
     result = link_find(phpsessid, '144811703')
     print(json.dumps(result, indent=2, ensure_ascii=False))

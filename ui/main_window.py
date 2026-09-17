@@ -2,7 +2,6 @@
 """
 ui/main_window.py — PixivFilterApp 主窗口
 
-从原 test_app.py 的「PyQt应用类」拆出。
 界面由 main_window.ui 生成（pyside6-uic → ui_main_window.py），
 本类只负责：控件事件、Signal/Slot 接线、线程管理、图片缩放/拖动。
 下载/保存/PHPSESSID 等耗时逻辑已拆分到 workers/，纯业务逻辑在 logic/。

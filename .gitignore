@@ -18,3 +18,18 @@ release
 model_script/__pycache__
 others
 small_projects
+
+# ============================================================
+# 个人信息 / 本地笔记：这些只在 test 分支保留，不上传到公开仓库
+# ============================================================
+phpsessid.txt
+user_all_profile.json
+artwork_*.json
+imagelink_all_data.txt
+pixiv爬取目录.pdf
+改动.txt
+预更新.txt
+Update content.md
+Update content.txt
+instructions.txt
+CLAUDE.md

@@ -1,6 +1,6 @@
 # Pixiv 图片筛选器
 
-一个基于 **PySide6** + **Gradio** 的 Pixiv 图片下载与筛选工具，支持关键词搜索、R18/R18G 过滤、AI 模型识别筛选、图片预览与管理。
+基于 **PySide6** 的 Pixiv 图片下载与筛选桌面工具，支持关键词 / 作者 / PID 三种搜索方式、R18/R18G 过滤、AI 模型识别筛选、图片预览与管理。
 
 ## 功能特性
 
@@ -11,42 +11,46 @@
 - 📥 **批量下载** — 支持多页、多 PID、多页数限制下载，带暂停/停止控制
 - 📋 **PID 黑名单** — 手动屏蔽不需要的作品 ID，避免重复出现
 - 🔐 **PHPSESSID 自动获取** — 通过 Selenium 自动登录并提取 Cookie
-- 🌐 **Web UI 模式** — 基于 Gradio 的轻量网页界面（`app.py`）
-- 📦 **一键打包** — 支持 PyInstaller 打包为独立 exe 可执行文件
+- 👤 **作者作品** — 按画师批量获取其全部作品
+- 🎯 **PID 直查** — 直接输入作品 ID 下载
+- 📦 **一键打包** — `python build.py --release` 打包为免安装 exe
 
 ## 项目结构
 
 ```
 ├── main.py                  # 主程序入口 — PySide6 桌面 GUI
+├── main_window.ui           # 界面源文件（Qt Designer）
 ├── ui/                      # 界面层
-│   └── main_window.py       # PixivFilterApp 主窗口（布局 + 事件/信号槽）
+│   ├── main_window.py       # PixivFilterApp 主窗口（布局 + 事件/信号槽）
+│   ├── ui_main_window.py    # 由 main_window.ui 生成（pyside6-uic），请勿手改
+│   └── app.qss              # 全局样式表
 ├── workers/                 # 后台任务（QObject + QThread）
-│   ├── search_worker.py     # 关键词 / 作者搜索与下载
+│   ├── search_worker.py     # 关键词 / 作者 / PID 搜索与下载
 │   ├── save_worker.py       # 保存原图
 │   └── php_worker.py        # PHPSESSID 获取 / 检测
 ├── logic/                   # 业务逻辑与配置
 │   ├── image_logic.py       # 图片 / 文件名逻辑 + PID 黑名单
 │   └── config_logic.py      # 路径、启动初始化、config.json 读写
-├── test_app.py              # 旧版单文件 GUI（保留作对照）
-├── app.py                   # 备用 — Gradio Web UI
 ├── build.py                 # 打包脚本 (PyInstaller)
-├── Pixiv图片筛选器.spec     # PyInstaller 打包配置
 ├── pixiv_image_download.py  # 图片下载模块
 ├── pixiv_imagelink.py       # Pixiv 直链获取模块
 ├── pixiv_id.py              # 作品 ID 搜索模块
 ├── get_phpsessid.py         # PHPSESSID 自动获取 (Selenium)
 ├── instal_webdriver_manager.py  # Edge WebDriver 安装
 ├── model_script/            # AI 模型模块
-│   ├── param.py             # 模型定义 (NahidaCNN) + 数据集
+│   ├── param.py             # 模型定义 (NahidaCNN)
 │   ├── train.py             # 模型训练脚本
 │   ├── predict.py           # PyTorch 推理
 │   └── function.py          # ONNX 转换 & 推理
-├── models/                  # 预训练模型文件 (.pth / .onnx)
-├── datasets/pic_datasets/   # 训练数据集 (0/1 二分类)
-├── requirements.txt         # torch_cpu Python 依赖
-├── config/config.json       # 设置：背景图 / 透明度 / PHPSESSID
-└── pids_filter.txt          # PID 黑名单
+├── models/                  # 预训练模型（发布用 .onnx）
+├── theme/                   # 预设背景图
+├── requirements.txt         # Python 依赖
+├── config/config.json       # 设置：背景图 / 透明度 / PHPSESSID（首次运行生成）
+└── pids_filter.txt          # PID 黑名单（首次运行生成，初始为空）
 ```
+
+> `datasets/pic_datasets/`（训练数据）与 `models/*.pth`（PyTorch 权重）仅供本地训练，
+> 不随仓库分发 —— 用户端只需要 `models/*.onnx`。
 
 ## 快速开始
 
@@ -70,31 +74,19 @@ pip install -r requirements.txt
 
 ### 4. 运行
 
-**桌面 GUI（推荐）：**
-
 ```bash
 python main.py
-```
-
-**Web UI（备用）：**
-
-```bash
-python app.py
 ```
 
 ### 5. 打包为 exe
 
 ```bash
-python build.py
+python build.py --release        # 生成 release/Pixiv图片筛选器/
+python build.py --release --zip  # 顺便压成 zip，便于分发
 ```
 
-或直接使用 PyInstaller：
-
-```bash
-pyinstaller Pixiv图片筛选器.spec
-```
-
-打包后的文件在 `release/` 目录下。
+`--release` 会自动隐藏控制台、把 `models/` 与 `theme/` 放到 exe 同级、预建
+`config/ saved/ temp/`，并在产物里生成 `使用说明.txt`。训练用的 `.pth` 权重不会被打进去。
 
 ## 使用说明
 
@@ -114,11 +106,23 @@ pyinstaller Pixiv图片筛选器.spec
 
 功能与筛选器相同，额外内置 **AI 模型识别**：自动筛选出包含"纳西妲"的图片。
 
-### 设置页面（Tab 3）
+### 作者作品（Tab 3）
+
+输入画师名或主页，批量获取该画师的作品列表，之后的预览 / 保存 / 丢弃操作与筛选器页一致。
+
+### PID 直查（Tab 4）
+
+直接粘贴作品 ID 下载。此页不做 R18 过滤、也不检查 PID 黑名单 ——
+用于已经明确知道要哪一张、不希望被过滤条件拦掉的场景。
+
+### 设置页面（Tab 5）
 
 - **下载限制**：按"图片张数"或"PID 个数"限制下载量
 - **页码限制**：跳过页数过多的作品（如跳过超过 5 页的合辑）
 - **模型识别**：启用/关闭 AI 识别功能
+- **背景图 / 透明度**：从 `theme/default_image`、`theme/added_image` 选择背景图，并调整界面透明度
+- **清理缓存**：清空 `temp/` 中的预览图缓存
+- **PHPSESSID**：粘贴后点「检测」验证，或点「获取」自动抓取
 
 ## AI 模型
 
@@ -155,7 +159,6 @@ python -m model_script.function
 | 包 | 用途 |
 |------|------|
 | PySide6 | 桌面 GUI 框架 |
-| gradio | Web UI 框架 |
 | requests | Pixiv API 请求 |
 | selenium | 自动获取 PHPSESSID |
 | onnxruntime | 模型推理（用户端） |
@@ -164,6 +167,16 @@ python -m model_script.function
 | pyinstaller | 打包为 exe |
 
 ## 更新日志
+
+### [260918] — 2026-09-18 · v0.1.0-beta.1（首个公开测试版）
+- 整理为可公开发行的版本：清理个人配置、训练数据与未使用的 Gradio Web UI 入口
+- 用户端改用 ONNX 推理，无需安装 PyTorch
+- 五个页面：筛选器 / 纳西妲 / 作者作品 / PID / 设置
+- 侧边栏新增「打开目录」按钮，直达下载文件夹
+- 界面统一为圆角卡片样式；修复启动时背景图不显示的问题
+- 下载按搜索关键词自动分二级目录
+- PHPSESSID 改存 `config/config.json`，不再使用 `phpsessid.txt`
+- `python build.py --release` 一键打包免安装 exe
 
 ### [251016] — 2025-10-16
 - 增加 R18/R18G 标签筛选

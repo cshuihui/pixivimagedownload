@@ -27,8 +27,9 @@ SPEC_FILE = os.path.join(PROJECT_ROOT, f"{APP_NAME}.spec")
 
 # 需要打包进去的额外数据文件 (源路径, 目标路径)
 # 元组格式: (源文件/目录, 目标目录)
+# 默认背景图由 theme/default_image/ 提供（见 config_logic._find_default_image，
+# 优先取「1」号预设），已随下面的 theme 一并打包，这里不需要单独的图片文件。
 DATA_FILES = [
-    ("143035291_p0.jpg", "."),          # 默认显示图片
     ("pixiv.ico", "."),                 # 程序图标
     ("ui/app.qss", "ui"),               # 统一样式表（_load_app_qss 按 ui/app.qss 查找）
     ("theme", "theme"),                 # 预设背景图（resource_path('theme/default_image')）

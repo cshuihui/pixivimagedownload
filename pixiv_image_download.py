@@ -153,8 +153,8 @@ def filename_extract_index(filename):
 def filename_replace_index(filename, new_index):
     """
     将文件名中的页码替换为新页码
-    例如: '143035291_p0.jpg' -> '143035291_p5.jpg'
-          '143035291_p12.jpg' -> '143035291_p15.jpg'
+    例如: '123456_p0.jpg' -> '123456_p5.jpg'
+          '123456_p12.jpg' -> '123456_p15.jpg'
     """
     # 匹配 _p 后跟数字的模式
     pattern = r'(_p)(\d+)'

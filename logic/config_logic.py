@@ -43,7 +43,10 @@ def _find_default_image():
                     return os.path.join(base, f)
             if files:
                 return os.path.join(base, files[0])
-    return resource_path('143035291_p0.jpg')
+    # 兜底：连 theme/ 都不存在（用户删掉了发布包里的 theme 目录）→ 返回空串，
+    # 界面退化为无背景图（_update_bg_pixmap 对空路径会隐藏背景层）。
+    # 发布包始终自带 theme/default_image/，正常不会走到这里。
+    return ""
 
 
 # ==================== 路径 / 文件常量 ====================

@@ -150,6 +150,13 @@ class Ui_MainWindow(object):
 
         self.sidebar_layout.addItem(self.sidebar_spacer)
 
+        self.open_download_btn = QPushButton(self.sidebar)
+        self.open_download_btn.setObjectName(u"open_download_btn")
+        self.open_download_btn.setMinimumSize(QSize(0, 45))
+        self.open_download_btn.setMaximumSize(QSize(16777215, 45))
+
+        self.sidebar_layout.addWidget(self.open_download_btn)
+
 
         self.body_layout.addWidget(self.sidebar)
 
@@ -1016,6 +1023,10 @@ class Ui_MainWindow(object):
         self.tab_btn3.setText(QCoreApplication.translate("MainWindow", u"\u4f5c\u8005\u4f5c\u54c1", None))
         self.tab_btn4.setText(QCoreApplication.translate("MainWindow", u"PID", None))
         self.tab_btn5.setText(QCoreApplication.translate("MainWindow", u"\u8bbe\u7f6e", None))
+#if QT_CONFIG(tooltip)
+        self.open_download_btn.setToolTip(QCoreApplication.translate("MainWindow", u"\u5728\u6587\u4ef6\u8d44\u6e90\u7ba1\u7406\u5668\u4e2d\u6253\u5f00\u4e0b\u8f7d\u76ee\u5f55", None))
+#endif // QT_CONFIG(tooltip)
+        self.open_download_btn.setText(QCoreApplication.translate("MainWindow", u"\u6253\u5f00\u76ee\u5f55", None))
         self.search_group1.setTitle("")
         self.label_keywords.setText(QCoreApplication.translate("MainWindow", u"\u641c\u7d22\u5173\u952e\u8bcd:", None))
         self.label_filter.setText(QCoreApplication.translate("MainWindow", u"\u5185\u5bb9\u8fc7\u6ee4:", None))

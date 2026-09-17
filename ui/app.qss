@@ -113,6 +113,25 @@
     background: rgba(0, 0, 0, 80);
 }
 
+/* ---------- 侧边栏最下方：打开下载目录 ---------- */
+/* 尺寸与观感跟上面的 Tab 按钮对齐，但它是「动作」不是「导航」，
+   所以不参与 active 选中态（也不需要补进上面的 Tab 选择器）。 */
+#open_download_btn {
+    text-align: center;
+    padding: 0px;
+    border: none;
+    border-radius: 8px;
+    color: #444;
+    font-size: 13px;
+    background: rgba(0, 0, 0, 25);
+}
+#open_download_btn:hover {
+    background: rgba(0, 0, 0, 45);
+}
+#open_download_btn:pressed {
+    background: rgba(0, 0, 0, 60);
+}
+
 /* ---------- 文件名叠加角标 ---------- */
 #filename_label, #filename_label2, #filename_label3, #filename_label4 {
     background-color: rgba(0, 0, 0, 150);

@@ -20,10 +20,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import (
     QPixmap, QIcon, QShortcut, QKeySequence, QColor, QPainter, QPainterPath,
-    QPen, QRegion
+    QPen, QRegion, QDesktopServices
 )
 from PySide6.QtCore import (
-    Qt, QThread, QTimer, QEvent, QPoint, QPointF, QRect, QRectF, QSize
+    Qt, QThread, QTimer, QEvent, QPoint, QPointF, QRect, QRectF, QSize, QUrl
 )
 
 from types import SimpleNamespace
@@ -189,6 +189,8 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
         self.tab_btn4.clicked.connect(lambda: self.stack.setCurrentIndex(3))
         self.tab_btn5.clicked.connect(lambda: self.stack.setCurrentIndex(4))
         self.stack.currentChanged.connect(self._on_tab_changed)
+        # 侧边栏最下方：在资源管理器中打开下载目录
+        self.open_download_btn.clicked.connect(self._on_open_download_dir)
 
         # 自定义页眉（标题栏）：最小化 / 最大化-还原 / 关闭
         self.min_btn.clicked.connect(self.showMinimized)
@@ -988,6 +990,19 @@ class PixivFilterApp(QMainWindow, Ui_MainWindow):
             return
         self._update_cache_size()
         self.show_toast("🧹 缓存已清理", "success", 1500)
+
+    # ==================== 打开下载目录 ====================
+    def _on_open_download_dir(self):
+        """在系统文件管理器中打开下载（保存）目录 saved/"""
+        path = os.path.abspath(config_logic.save_dir)
+        try:
+            os.makedirs(path, exist_ok=True)
+        except Exception as e:
+            QMessageBox.warning(self, "打开失败", f"无法创建下载目录：\n{path}\n\n{e}")
+            return
+        # QDesktopServices 跨平台，打包后同样可用（os.startfile 仅 Windows）
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(path)):
+            QMessageBox.warning(self, "打开失败", f"无法打开目录：\n{path}")
 
     def _ensure_bg_label(self):
         """背景图用一个铺底 QLabel 绘制（保持在所有子控件下方）

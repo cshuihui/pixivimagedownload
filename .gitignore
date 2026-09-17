@@ -4,6 +4,7 @@
 download
 saved
 temp
+config
 msedgedriver.exe
 /datasets
 *.pth

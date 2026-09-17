@@ -34,6 +34,10 @@ DATA_FILES = [
     ("theme", "theme"),                 # 预设背景图（resource_path('theme/default_image')）
 ]
 
+# 注意：不要把 pids_filter.txt 打包进去。
+# 它是**用户自己积累的屏蔽列表**（本机 69 个 PID），新用户应当从空列表开始。
+# 不打包即可满足：logic/image_logic.py 用 'a+' 打开，缺失时会自动创建空文件。
+
 # 需要额外引入的隐藏模块
 HIDDEN_IMPORTS = [
     # selenium 动态加载的子模块（PyInstaller 静态分析检测不到）
@@ -61,6 +65,114 @@ EXCLUDES = [
     "torch",
     "torchvision",
 ]
+
+
+# ==================== 发布版（--release）====================
+# 下面这些必须放在 **exe 同级目录**：代码用 os.path.abspath(".")（启动时的
+# 工作目录）去定位它们，塞进 bundle 是没用的。
+RELEASE_COPY_TO_EXE_DIR = [
+    # (源, 说明, 只复制这些后缀；None = 整个复制)
+    # model_dir = abspath(".")/models —— 「模型识别」功能靠它。
+    # 必须过滤：models/ 里还有训练用的 *.pth（本机 5 个共 160MB），
+    # 被 .gitignore 排除、运行时完全用不到，不筛就会把发布包撑大 4 倍。
+    ("models", "模型文件（模型识别需要）", (".onnx", ".onnx.data")),
+    # bg_search_dirs 也基于 abspath(".") —— 背景图下拉框靠它
+    ("theme", "预设背景图", None),
+    # pids_filter.txt 刻意不在清单里：它是用户的个人屏蔽列表，
+    # 应由程序首次运行时自动创建为空文件（见上文 DATA_FILES 的说明）。
+]
+
+# 程序会按需创建这些目录，预先建好只是让发布包结构一目了然
+RELEASE_EMPTY_DIRS = ["config", "saved", "temp"]
+
+
+def dir_size_mb(path):
+    """统计目录总大小（MB）"""
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for fn in files:
+            try:
+                total += os.path.getsize(os.path.join(root, fn))
+            except OSError:
+                pass
+    return total / 1024 / 1024
+
+
+def _copy_tree_filtered(src, dst, suffixes):
+    """按后缀白名单复制目录；suffixes 为 None 时整个复制。返回复制文件数"""
+    if os.path.exists(dst):
+        shutil.rmtree(dst)
+    if suffixes is None:
+        shutil.copytree(src, dst)
+        return sum(len(fs) for _r, _d, fs in os.walk(dst))
+    count = 0
+    for root, _dirs, files in os.walk(src):
+        rel = os.path.relpath(root, src)
+        target = dst if rel == '.' else os.path.join(dst, rel)
+        os.makedirs(target, exist_ok=True)
+        for fn in files:
+            if not fn.lower().endswith(suffixes):
+                continue
+            shutil.copy2(os.path.join(root, fn), os.path.join(target, fn))
+            count += 1
+    return count
+
+
+def copy_release_runtime(app_dir):
+    """把必须位于 exe 同级的运行期数据复制过去"""
+    for rel, desc, suffixes in RELEASE_COPY_TO_EXE_DIR:
+        src = os.path.join(PROJECT_ROOT, rel)
+        if not os.path.exists(src):
+            print(f"  ⚠ 跳过（源不存在）: {rel}")
+            continue
+        dst = os.path.join(app_dir, rel)
+        if os.path.isdir(src):
+            n = _copy_tree_filtered(src, dst, suffixes)
+            tag = f"{n} 个文件" + ("（已过滤）" if suffixes else "")
+        else:
+            shutil.copy2(src, dst)
+            tag = "1 个文件"
+        size = dir_size_mb(dst) if os.path.isdir(dst) else os.path.getsize(dst) / 1024 / 1024
+        print(f"  ✓ {rel:<18} {size:7.1f} MB  {tag}  {desc}")
+    for d in RELEASE_EMPTY_DIRS:
+        os.makedirs(os.path.join(app_dir, d), exist_ok=True)
+    print(f"  ✓ 预建空目录: {', '.join(RELEASE_EMPTY_DIRS)}")
+
+
+def write_usage_note(app_dir):
+    """在发布目录里生成使用说明"""
+    note = f"""【{APP_NAME}】使用说明
+
+启动
+    双击 {APP_NAME}.exe 即可，无需安装 Python。
+
+注意
+    本文件夹必须整体保留，不要单独移动其中某个文件 ——
+    程序依赖同级的 models/、theme/ 等目录。
+
+首次使用
+    1. 打开「设置」页填入 PHPSESSID（可点「获取」自动抓取，需要 Edge 浏览器）
+    2. 下载的图片保存在 saved/，可用左下角「打开目录」按钮直达
+
+目录说明
+    models/   模型文件（「模型识别」功能需要）
+    theme/    预设背景图
+    saved/    下载的图片
+    temp/     预览图缓存（可在设置页清理）
+    config/   界面设置与 PHPSESSID
+    pids_filter.txt  屏蔽列表（初始为空，勾选各页的「pid屏蔽」后累积）
+"""
+    with open(os.path.join(app_dir, '使用说明.txt'), 'w', encoding='utf-8') as f:
+        f.write(note)
+    print("  ✓ 使用说明.txt")
+
+
+def make_zip(app_dir):
+    """打包成 zip 放到 release/ 下"""
+    print(f"\n🗜  压缩 {APP_NAME} ...")
+    archive = shutil.make_archive(os.path.join(DIST_DIR, APP_NAME), 'zip',
+                                  root_dir=DIST_DIR, base_dir=APP_NAME)
+    print(f"  ✓ {os.path.basename(archive)}  ({os.path.getsize(archive) / 1024 / 1024:.1f} MB)")
 
 
 def check_pyinstaller():
@@ -133,22 +245,21 @@ def build(args):
     cmd.extend(["--distpath", DIST_DIR])
 
     # 模式选择
-    # --onedir: 生成目录（启动快，便于调试）
+    # --onedir: 生成目录（启动快；--release 发布版固定用这个）
     # --onefile: 生成单个 exe（文件大，启动稍慢）
-    # 默认使用 onedir 模式
-    # cmd.append("--onedir")
-    # 如果希望单个 exe 文件，取消下面这行注释，注释掉上面那行
-    # cmd.append("--onefile")
-    if args.onefile:
+    if args.release and args.onefile:
+        print("⚠ --release 与 --onefile 互斥：发布版按 onedir 处理")
+    if args.onefile and not args.release:
         cmd.append("--onefile")
     else:
         cmd.append("--onedir")
 
     # 窗口模式（不显示控制台）
-    # 由于有 print 输出和交互，使用 console 模式更方便调试
-    # 正式发布可以改为 --windowed
-    # cmd.append("--windowed")
-    if args.windowed:
+    # 开发调试用 console（能看到完整终端输出）；--release 发布版自动隐藏控制台。
+    # 隐藏控制台是安全的：实测 windowed 下 sys.stdout/sys.stderr 会是 None，
+    # 但 CPython 的 print() 遇到 None 直接静默返回、不抛异常；运行时路径里
+    # 也没有任何 sys.stdout.reconfigure() 调用（只有本脚本构建时用）。
+    if args.windowed or args.release:
         cmd.append("--windowed")
 
     # 添加入口文件
@@ -169,10 +280,21 @@ def build(args):
     result = subprocess.run(cmd, cwd=PROJECT_ROOT)
 
     if result.returncode == 0:
+        app_dir = os.path.join(DIST_DIR, APP_NAME)
         print()
         print("=" * 60)
         print(f"✅ 打包成功!")
-        print(f"📁 可执行文件位于: {os.path.join(DIST_DIR, APP_NAME)}")
+        print(f"📁 可执行文件位于: {app_dir}")
+        if args.release:
+            print("=" * 60)
+            print()
+            print("📦 整理发布目录（把运行期数据放到 exe 同级）...")
+            copy_release_runtime(app_dir)
+            write_usage_note(app_dir)
+            print()
+            print(f"📊 成品体积: {dir_size_mb(app_dir):.1f} MB")
+            if args.zip:
+                make_zip(app_dir)
         print("=" * 60)
         return True
     else:
@@ -200,6 +322,10 @@ if __name__ == "__main__":
     parser.add_argument("--clean", action="store_true", help="清理构建产物")
     parser.add_argument("--onefile", action="store_true", help="打包为单个 exe 文件")
     parser.add_argument("--windowed", action="store_true", help="无控制台窗口模式")
+    parser.add_argument("--release", action="store_true",
+                        help="发布版：onedir + 隐藏控制台 + models/theme 等放到 exe 同级")
+    parser.add_argument("--zip", action="store_true",
+                        help="配合 --release，额外打成 zip 便于分发")
 
     args = parser.parse_args()
 
@@ -209,7 +335,8 @@ if __name__ == "__main__":
         build(args)
         print()
         print("💡 提示:")
-        print("  - 打包为目录: python build.py")
-        print("  - 打包为单个 exe: python build.py --onefile")
-        print("  - 无控制台窗口: python build.py --windowed")
-        print("  - 清理产物: python build.py --clean")
+        print("  - 【发布版】打包可分发软件: python build.py --release")
+        print("  - 【发布版】同时打成 zip  : python build.py --release --zip")
+        print("  - 开发用（带控制台）      : python build.py")
+        print("  - 打包为单个 exe          : python build.py --onefile")
+        print("  - 清理构建产物            : python build.py --clean")

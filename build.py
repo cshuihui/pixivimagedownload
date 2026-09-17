@@ -27,13 +27,24 @@ SPEC_FILE = os.path.join(PROJECT_ROOT, f"{APP_NAME}.spec")
 
 # 需要打包进去的额外数据文件 (源路径, 目标路径)
 # 元组格式: (源文件/目录, 目标目录)
-# 默认背景图由 theme/default_image/ 提供（见 config_logic._find_default_image，
-# 优先取「1」号预设），已随下面的 theme 一并打包，这里不需要单独的图片文件。
+# 放进这里的都是必须由 resource_path() 从 _MEIPASS（打包内部）读取的文件。
 DATA_FILES = [
-    ("pixiv.ico", "."),                 # 程序图标
-    ("ui/app.qss", "ui"),               # 统一样式表（_load_app_qss 按 ui/app.qss 查找）
-    ("theme", "theme"),                 # 预设背景图（resource_path('theme/default_image')）
+    ("pixiv.ico", "."),                 # 程序图标（resource_path('pixiv.ico')）
+    ("ui/app.qss", "ui"),               # 统一样式表（resource_path('ui/app.qss')）
+    ("theme", "theme"),                 # 预设背景图（仅 --onefile 等非发布模式需要）
 ]
+
+# --release 模式下要从 DATA_FILES 里剔除的项（其余模式照旧，避免破坏 --onefile）。
+#
+# theme/ 为什么在发布版里不该打进 bundle：
+#   发布版由 RELEASE_COPY_TO_EXE_DIR 把 theme/ 放到 **exe 同级**，那是必须的 ——
+#   bg_search_dirs / _scan_background_images 都基于 os.path.abspath(".")，
+#   而且 theme/added_image（用户自己添加的背景图）必须可写，不能塞进 bundle。
+#   如果两边都放，同一批背景图会存两份：实测多占 5.8 MB，而且都是 JPEG，
+#   zip 里几乎原样保留（实打实多 5.7 MB）。
+#   去掉 bundle 那份是安全的：_find_default_image() 在 _MEIPASS 找不到时会
+#   自动回退到 abspath(".")/theme/default_image。
+RELEASE_SKIP_DATA = ("theme",)
 
 # 注意：不要把 pids_filter.txt 打包进去。
 # 它是**用户自己积累的屏蔽列表**（本机 69 个 PID），新用户应当从空列表开始。
@@ -77,7 +88,8 @@ RELEASE_COPY_TO_EXE_DIR = [
     # 必须过滤：models/ 里还有训练用的 *.pth（本机 5 个共 160MB），
     # 被 .gitignore 排除、运行时完全用不到，不筛就会把发布包撑大 4 倍。
     ("models", "模型文件（模型识别需要）", (".onnx", ".onnx.data")),
-    # bg_search_dirs 也基于 abspath(".") —— 背景图下拉框靠它
+    # bg_search_dirs 也基于 abspath(".") —— 背景图下拉框靠它。
+    # 发布版里这是 theme 的**唯一**一份（bundle 内那份已由 RELEASE_SKIP_DATA 剔除）
     ("theme", "预设背景图", None),
     # pids_filter.txt 刻意不在清单里：它是用户的个人屏蔽列表，
     # 应由程序首次运行时自动创建为空文件（见上文 DATA_FILES 的说明）。
@@ -226,8 +238,10 @@ def build(args):
     else:
         print(f"⚠ 图标文件不存在 ({ICON_FILE})，将使用默认图标")
 
-    # 数据文件
-    for src_rel, dst in DATA_FILES:
+    # 数据文件（发布版剔除 theme：它放 exe 同级，理由见 RELEASE_SKIP_DATA）
+    data_files = [d for d in DATA_FILES if d[0] not in RELEASE_SKIP_DATA] \
+        if args.release else DATA_FILES
+    for src_rel, dst in data_files:
         src_path = os.path.join(PROJECT_ROOT, src_rel)
         if os.path.exists(src_path):
             cmd.extend(["--add-data", f"{src_path}{os.pathsep}{dst}"])

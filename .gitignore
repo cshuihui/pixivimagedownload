@@ -1,9 +1,10 @@
-/__pycache__
+__pycache__/
 .idea
 .vscode
 download
 saved
 temp
+config
 msedgedriver.exe
 /datasets
 *.pth
@@ -17,4 +18,5 @@ release
 model_script/__pycache__
 others
 small_projects
-.pyc
+*.pyc
+/dsh
